@@ -67,7 +67,6 @@ void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) xhash 
     u64 x4 = 0b1010101010101010101010101010101010101010101010101010101010101010ULL * size; // 10
     u64 x5 = 0b0100010001000100010001000100010001000100010001000100010001000100ULL * size;
     u64 x6 = 0b1000100010001000100010001000100010001000100010001000100010001000ULL * size;
-    u64 x7 = 0b0001000100010001000100010001000100010001000100010001000100010001ULL * size;
 
     while (size) {
 
@@ -84,25 +83,24 @@ void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) xhash 
         }
 
         // STATUS VS VALUE
-        x0 += x7 * w;
-        x1 += x6 * w;
-        x2 += x5 * w;
-        x3 += x4 * w;
-        x4 += x3 * w;
-        x5 += x2 * w;
-        x6 += x1 * w;
-        x7 += x0 * w;
+        x0 += x6 * w;
+        x1 += x5 * w;
+        x2 += x4 * w;
+        x3 += x3 * w;
+        x4 += x2 * w;
+        x5 += x1 * w;
+        x6 += x0 * w;
 
         // ACCUMULATE
         // A IDÉIA É QUE CADA WORD DO VETOR VAI SE ALTERANDO DE FORMA DIFERENTE
-        A.v512[0] += x7;
-        A.v512[1] += x6;
-        A.v512[2] += x5;
-        A.v512[3] += x4;
-        A.v512[4] += x3;
-        A.v512[5] += x2;
-        A.v512[6] += x1;
-        A.v512[7] += x0;
+        A.v512[0] += x6;
+        A.v512[1] += x5;
+        A.v512[2] += x4;
+        A.v512[3] += x3;
+        A.v512[4] += x2;
+        A.v512[5] += x1;
+        A.v512[6] += x0;
+        A.v512[7] +=  w;
 
         //
         A.v128[0] ^=
