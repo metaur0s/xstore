@@ -102,8 +102,7 @@ void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) xhash 
         A.v512[6] += x0;
         A.v512[7] +=  w;
 
-        // MIX ACCUMULATORS
-        //                          [12|34|46|78]
+        // MIX ACCUMULATORS         [12|34|46|78]
         A.v128[0] += A.v128[2];  // [==|34|++|78]
         A.v128[1] += A.v128[3];  // [12|==|56|++]
         A.v256[0] ^= A.v256[1];  // [== ==|^^ ^^]
