@@ -33,7 +33,7 @@ typedef u64 u64x8 __attribute__ ((vector_size(8 * sizeof(u64))));
 typedef u64 u64x4 __attribute__ ((vector_size(4 * sizeof(u64))));
 typedef u64 u64x2 __attribute__ ((vector_size(2 * sizeof(u64))));
 
-u64x2 hash;
+u64x8 hash;
 u64x4 csum;
 
 // __attribute__((target("popcnt", "avx2")))
@@ -61,7 +61,7 @@ void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) xhash 
     // SWAPPERS
     // SIZE DEPENDENT
     u64 x0 = 0b0101010101010101010101010101010101010101010101010101010101010101ULL * size; // 01
-    u64 x1 = 0b0000100010001000100010001000100010001000100010001000100010001000ULL * size;
+    u64 x1 = 0b1001001001001001001001001001001001001001001001001001001001001001ULL * size;
     u64 x2 = 0b0001000100010001000100010001000100010001000100010001000100010001ULL * size;
     u64 x3 = 0b0010001000100010001000100010001000100010001000100010001000100010ULL * size;
     u64 x4 = 0b1010101010101010101010101010101010101010101010101010101010101010ULL * size; // 10
@@ -102,22 +102,18 @@ void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) xhash 
         A.v512[6] += x0;
         A.v512[7] +=  w;
 
-        //
-        A.v128[0] ^=
-        A.v128[3];
-
-        // REDUCE TO 256
-        A.v256[0] += // [1 2 3 4|5 6 7 8]
-        A.v256[1];   //    [0]     [1]
+        // MIX ACCUMULATORS
+        //                          [12|34|46|78]
+        A.v128[0] += A.v128[2];  // [==|34|++|78]
+        A.v128[1] += A.v128[3];  // [12|==|56|++]
+        A.v256[0] ^= A.v256[1];  // [== ==|^^ ^^]
+        A.v128[2] += A.v128[1];  // [12|++|==|78]
+        A.v128[3] += A.v128[0];  // [++|34|56|==]
     }
-
-    // REDUCE TO 128
-    A.v128[0] +=  // [1 2|3 4|5 6|7 8]
-    A.v128[1];    //  [0] [1] [2] [3]
 
     // SAVE
     // WARNING: ENDIANESS
-    hash = A.v128[0];
+    hash = A.v512;
 }
 
 // FOR SPEED
