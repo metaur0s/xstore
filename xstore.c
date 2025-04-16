@@ -75,17 +75,17 @@ void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) xhash 
         }
 
         // STATUS VS VALUE
-        x0 = swap64(w += x3);
-        x1 = swap64(w += x2);
-        x2 = swap64(w += x1);
-        x3 = swap64(w += x0);
+        x0 = swap64(w += x0);
+        x1 = swap64(w += x1);
+        x2 = swap64(w += x2);
+        x3 = swap64(w += x3);
 
         // ACCUMULATE
         // A IDÉIA É QUE CADA WORD DO VETOR VAI SE ALTERANDO DE FORMA DIFERENTE
-        A *= w += (x0 + x1) * x2;
-        A += w *= (x1 + x2) * x3;
-        A *= w += (x2 + x3) * x0;
-        A += w *= (x3 + x0) * x1;
+        A *= x1;
+        A += x2;
+        A *= x3;
+        A += x0;
     }
 
     // ALL WORDS CONTAIN THE INFO
