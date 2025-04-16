@@ -95,21 +95,27 @@ void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) xhash 
 
         // ACCUMULATE
         // A IDÉIA É QUE CADA WORD DO VETOR VAI SE ALTERANDO DE FORMA DIFERENTE
-        A.v512 *= x7;
-        A.v512 += x6;
-        A.v512 *= x5;
-        A.v512 += x4;
-        A.v512 *= x3;
-        A.v512 += x2;
-        A.v512 *= x1;
-        A.v512 += x0;
+        A.v512[0] += x7;
+        A.v512[1] += x6;
+        A.v512[2] += x5;
+        A.v512[3] += x4;
+        A.v512[4] += x3;
+        A.v512[5] += x2;
+        A.v512[6] += x1;
+        A.v512[7] += x0;
+
+        //
+        A.v128[0] ^=
+        A.v128[3];
+
+        // REDUCE TO 256
+        A.v256[0] += // [1 2 3 4|5 6 7 8]
+        A.v256[1];   //    [0]     [1]
     }
 
     // REDUCE TO 128
-    //                            [0]     [1]
-    A.v256[0] += A.v256[1]; // [1 2 3 4|5 6 7 8]
-    A.v128[0] ^= A.v128[1]; // [1 2|3 4|5 6|7 8]
-    //                          [0] [1] [2] [3]
+    A.v128[0] +=  // [1 2|3 4|5 6|7 8]
+    A.v128[1];    //  [0] [1] [2] [3]
 
     // SAVE
     // WARNING: ENDIANESS
@@ -127,8 +133,8 @@ void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) xcsum 
         0b0111111111101111011001100100101100010001100110110100110010111001ULL,
     };
 
-    u64 x0 = 0b0101010101010101010101010101010101010101010101010101010101010101ULL;
-    u64 x1 = 0b1010101010101010101010101010101010101010101010101010101010101010ULL;
+    u64 a = 0b0101010101010101010101010101010101010101010101010101010101010101ULL;
+    u64 b = 0b1010101010101010101010101010101010101010101010101010101010101010ULL;
 
     while (size) {
 
@@ -144,8 +150,10 @@ void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) xcsum 
             data += sizeof(u8);
         }
 
-        A += x0 ^= w;
-        A ^= x1 += w;
+        //
+        A +=          w;
+        A *= a += b * w;
+        A += b += a * w;
     }
 
     // ALL WORDS CONTAIN THE INFO
