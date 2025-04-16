@@ -90,11 +90,11 @@ void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) xhash 
 
     // ALL WORDS CONTAIN THE INFO
     A += A[7];
-    A ^= A[6];
+    A += A[6];
     A += A[5];
-    A ^= A[4];
+    A += A[4];
     A += A[3];
-    A ^= A[2];
+    A += A[2];
     A += A[1];
 
     // SAVE
@@ -136,7 +136,7 @@ void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) xcsum 
 
     // ALL WORDS CONTAIN THE INFO
     A += A[3];
-    A ^= A[2];
+    A += A[2];
     A += A[1];
 
     // SAVE
