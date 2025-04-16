@@ -29,11 +29,12 @@ static inline u64 swap64 (const u64 x) {
     return swap64q(x, popcount64(x));
 }
 
-typedef u64 v512 __attribute__ ((vector_size(8 * sizeof(u64))));
-typedef u64 v256 __attribute__ ((vector_size(4 * sizeof(u64))));
+typedef u64 u64x8 __attribute__ ((vector_size(8 * sizeof(u64))));
+typedef u64 u64x4 __attribute__ ((vector_size(4 * sizeof(u64))));
+typedef u64 u64x2 __attribute__ ((vector_size(2 * sizeof(u64))));
 
-v512 hash;
-v256 csum;
+u64x2 hash;
+u64x4 csum;
 
 // __attribute__((target("popcnt", "avx2")))
 
@@ -42,7 +43,11 @@ void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) xhash 
 
     // ACUMULATORS
     // SEE xstore-gen.py
-    v512 A = {
+    union {
+        u64x8 v512;
+        u64x4 v256[2];
+        u64x2 v128[4];
+    } A = {{
         0b0000000001001011110101110010100110001100010010011110101011100110ULL,
         0b1000100111010101011111011110011011010101011101111011110000011000ULL,
         0b1100001010100110001010001100111010100001100011111111101001110011ULL,
@@ -51,14 +56,18 @@ void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) xhash 
         0b0010101010000101100111011110111111000101011000101101001010100001ULL,
         0b1100110111101011100111100011000010101110110011100010110111100000ULL,
         0b0111011011001110101100001111001000110001010110010110101000101110ULL
-    };
+    }};
 
     // SWAPPERS
     // SIZE DEPENDENT
-    u64 x0 = 0b0101010101010101010101010101010101010101010101010101010101010101ULL * size;
-    u64 x1 = 0b0000000100000001000000010000000100000001000000010000000100000001ULL * size;
-    u64 x2 = 0b1010101010101010101010101010101010101010101010101010101010101010ULL * size;
-    u64 x3 = 0b0001000100010001000100010001000100010001000100010001000100010001ULL * size;
+    u64 x0 = 0b0101010101010101010101010101010101010101010101010101010101010101ULL * size; // 01
+    u64 x1 = 0b0000100010001000100010001000100010001000100010001000100010001000ULL * size;
+    u64 x2 = 0b0001000100010001000100010001000100010001000100010001000100010001ULL * size;
+    u64 x3 = 0b0010001000100010001000100010001000100010001000100010001000100010ULL * size;
+    u64 x4 = 0b1010101010101010101010101010101010101010101010101010101010101010ULL * size; // 10
+    u64 x5 = 0b0100010001000100010001000100010001000100010001000100010001000100ULL * size;
+    u64 x6 = 0b1000100010001000100010001000100010001000100010001000100010001000ULL * size;
+    u64 x7 = 0b0001000100010001000100010001000100010001000100010001000100010001ULL * size;
 
     while (size) {
 
@@ -75,38 +84,43 @@ void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) xhash 
         }
 
         // STATUS VS VALUE
-        x0 = swap64(w += x0);
-        x1 = swap64(w += x1);
-        x2 = swap64(w += x2);
-        x3 = swap64(w += x3);
+        x0 += x7 * w;
+        x1 += x6 * w;
+        x2 += x5 * w;
+        x3 += x4 * w;
+        x4 += x3 * w;
+        x5 += x2 * w;
+        x6 += x1 * w;
+        x7 += x0 * w;
 
         // ACCUMULATE
         // A IDÉIA É QUE CADA WORD DO VETOR VAI SE ALTERANDO DE FORMA DIFERENTE
-        A *= x1;
-        A += x2;
-        A *= x3;
-        A += x0;
+        A.v512 *= x7;
+        A.v512 += x6;
+        A.v512 *= x5;
+        A.v512 += x4;
+        A.v512 *= x3;
+        A.v512 += x2;
+        A.v512 *= x1;
+        A.v512 += x0;
     }
 
-    // ALL WORDS CONTAIN THE INFO
-    A += A[7];
-    A += A[6];
-    A += A[5];
-    A += A[4];
-    A += A[3];
-    A += A[2];
-    A += A[1];
+    // REDUCE TO 128
+    //                            [0]     [1]
+    A.v256[0] += A.v256[1]; // [1 2 3 4|5 6 7 8]
+    A.v128[0] ^= A.v128[1]; // [1 2|3 4|5 6|7 8]
+    //                          [0] [1] [2] [3]
 
     // SAVE
     // WARNING: ENDIANESS
-    hash = A;
+    hash = A.v128[0];
 }
 
 // FOR SPEED
 // WE CAN ALWAYS DO A EVEN DEEPER CHECK BY VERIFYING THE HASH OF THE FILES
 void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) xcsum (const void* restrict data, uint size) {
 
-    v256 A = {
+    u64x4 A = {
         0b1110000110010001000101100101000110101011100001010001101011100011ULL,
         0b0001101110000110111010000111100011000001101101001110101001000110ULL,
         0b0000101000011010010001111011101100011000110001001100111111111100ULL,

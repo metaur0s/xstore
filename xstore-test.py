@@ -11,21 +11,21 @@ sample = open('/dev/urandom', 'rb').read(TEST_BUFF_SIZE)
 
 # BENCHMARK
 for FUNC, func in (
-    ('XCSUM', xstore.xstorelib.lib.xcsum),
     ('XHASH', xstore.xstorelib.lib.xhash),
+    ('XCSUM', xstore.xstorelib.lib.xcsum),
 ):
 
     print(f'----- {FUNC}')
 
     for size, rounds in (
-        ( 64,          5000000),
-        (128,          5000000),
-        (256,          5000000),
-        (1024,         4000000),
-        (65536,         120000),
-        (256*1024,       50000),
-        (64*1024*1024,     200),
-        (128*1024*1024,    100),
+        ( 64,          4000000),
+        (128,          4000000),
+        (256,          2800000),
+        (1024,          500000),
+        (8192,           80000),
+        (256*1024,        2500),
+        (512*1024,        1000),
+        (8*1024*1024,       25),
     ):
 
         assert size <= TEST_BUFF_SIZE
