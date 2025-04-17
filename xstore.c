@@ -47,15 +47,14 @@ typedef u8 u8x32  __attribute__ ((vector_size(32 * sizeof(u8)))); // 256
 typedef u8 u8x16  __attribute__ ((vector_size(16 * sizeof(u8)))); // 128
 
 // __attribute__((target("popcnt", "avx2")))
-//void *aligned_alloc(size_t alignment, size_t size);
 
 #define X_LEN 8
 
 typedef struct xhash_s {
     u64x8 X [X_LEN];
     u64x8 A;
-    u64x8 tmp;
-    uint tsize; // TEMP SIZE
+    u8 tmp [sizeof(u64x8) - 1];
+    u8 tsize; // TEMP SIZE
 } xhash_s;
 
 // TODO: PERMITIR INICIALIZAR OS PARAMETROS NO CREATE E NO RESET
@@ -147,6 +146,7 @@ static const xhash_s skel = {
 
 // NOTE: THE HASH IS SAVED BIG ENDIAN
 // TODO: restrict ctx vs ctx->temp?
+// TODO: UMA VERSAO ALINHADA
 static void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) hash_do (xhash_s* const restrict ctx, const u64x8* restrict data, uint q) {
 
 #define A (ctx->A)
@@ -156,7 +156,7 @@ static void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing")))
            q--;
 
         // ORIGINAL
-        u64x8 O = *data++;
+        u64x8 O; memcpy(&O, data++, sizeof(O));
 
         // INVERT ENDIANESS
 #if 1 // TODO: IS_THIS_LITTLE_ENDIAN ?
@@ -179,22 +179,21 @@ static void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing")))
 
             u64x8 q = A + O;
 
-            // YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-            //                         + >> 32 YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-            //                                 YYYYYYYYYYYYYYYYXXXXXXXXXXXXXXXX
-            //                         + >> 16                 YYYYYYYYYYYYYYYYXXXXXXXXXXXXXXXX
-            //                                                 YYYYYYYYXXXXXXXX
-            //                         + >>  8                         YYYYYYYYXXXXXXXX
-            //                                                         YYXXXXXX
-            //                         + >>  4                             YYXXXXXX
-            //                           &                               XXXXXX
+            // YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX|
+            //                         + >> 32 YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY|XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+            //                                 YYYYYYYYYYYYYYYYXXXXXXXXXXXXXXXX|
+            //                         + >> 16                 YYYYYYYYYYYYYYYY|XXXXXXXXXXXXXXXX
+            //                                                 YYYYYYYYXXXXXXXX|
+            //                         + >>  8                         YYYYYYYY|XXXXXXXX
+            //                                                         YYXXXXXX|
+            //                         + >>  4                             YYXX|XXXX
+            //                           &                               XXXXXX|
             q += q >> 32;
             q += q >> 16;
             q += q >>  8;
             q += q >>  4;
 
-            // %= 64
-            q &= 0b111111U;
+            q &= 0b111111U; // %= 64
 
             // SWAP64
             // O ORIGINAL NAO PERDE NENHUM BIT POIS NAO HA OVERFLOW
@@ -220,36 +219,36 @@ static void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing")))
 #undef B
 }
 
-void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) xhash_iter (xhash_s* const restrict ctx, const u8* restrict data, uint size) {
+void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) xhash_iter (xhash_s* const restrict ctx, const void* restrict data, uint size) {
 
     // NOTE: É SAFE PASSAR DATA NULL COM SIZE 0
     ASSERT(data != NULL || size == 0);
 
-    ASSERT(ctx->tsize <= sizeof(u64));
+    ASSERT(ctx->tsize <= sizeof(ctx->tmp));
 
-    // SE TEM, É MANDATÓRIO QUE USE ELE
-    if (ctx->tsize) {
+    // QUANTO TEM
+    uint chunk = ctx->tsize;
 
-        ASSERT(1 <= ctx->tsize && ctx->tsize <= sizeof(u64));
+    if (chunk) {
 
         // QUANTO FALTA PARA COMPLETAR
-        uint need = sizeof(u64) - ctx->tsize;
+        chunk = sizeof(u64x8) - chunk;
 
         // MAS SÓ PODE PEGAR O QUE TEM
-        if (need > size)
-            need = size;
+        if (chunk > size)
+            chunk = size;
 
-        memcpy(ctx->tmp8 + ctx->tsize, data, need);
+        memcpy(ctx->tmp + ctx->tsize, data, chunk);
 
         // TIROU DO BUFFER...
-        data += need;
-        size -= need;
+        data += chunk;
+        size -= chunk;
 
         // ...E COLOCOU NO TEMP
-        ctx->tsize += need;
+        ctx->tsize += chunk;
 
-        if (ctx->tsize != sizeof(u64)) {
-            // MAS AINDA NAO TEM UM TEMP COMPLETO
+        if (ctx->tsize != sizeof(u64x8)) {
+            // AINDA NAO TEM UM TEMP COMPLETO
             ASSERT(size == 0);
             return;
         }
@@ -257,20 +256,21 @@ void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) xhash_
         // ENTAO ESTA CONSUMINDO ELE
         ctx->tsize = 0;
 
-        hash_do(ctx, &ctx->tmp64, 1);
+        hash_do(ctx, (u64x8*)ctx->tmp, 1);
     }
 
-    hash_do(ctx, (u64*)data, size / sizeof(u64));
+    // NAO TEM TEMP
+    hash_do(ctx, (u64x8*)data, size / sizeof(u64x8));
 
-    // VAI SOBRAR ISSO
-    const uint sobra = size % sizeof(u64);
+    // SOBROU ISSO
+    const uint sobra = size % sizeof(u64x8);
 
     //
     if (sobra)
-        memcpy(ctx->tmp8, data + size - sobra, (ctx->tsize = sobra));
+        memcpy(ctx->tmp, data + size - sobra, (ctx->tsize = sobra));
 }
 
-void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) xhash_done (xhash_s* const restrict ctx, const u8* restrict data, uint size, u8* const restrict hash, const uint hash_len) {
+void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) xhash_done (xhash_s* const restrict ctx, const void* restrict data, uint size, u8* const restrict hash, const uint hash_len) {
 
     dbg("xhash_done(ctx = %p, data = %p, size = %u)\n", ctx, data, size);
     dbg("xhash_done() ctx->tsize = %u, ctx->tmp64 = %016llX\n", ctx->tsize, (uintll)BE64(ctx->tmp64));
