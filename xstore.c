@@ -168,7 +168,7 @@ void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) xhash 
             );
 
         //
-        A += __builtin_shuffle(X[popcount64(w) % 8], (A >> popcount64(w)) % 8);
+        A += __builtin_shuffle(X[popcount64(w) & 0b111], ((u8x64)(((u64x8)A) >> popcount64(w))) & 0b111);
     }
 
     // SAVE
