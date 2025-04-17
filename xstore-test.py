@@ -1,6 +1,7 @@
 #!/usr/bin/python
 
 import time
+import cffi
 import xstore
 
 #
@@ -9,10 +10,13 @@ TEST_BUFF_SIZE = 256*1024*1024
 # SAMPLE DATA
 sample = open('/dev/urandom', 'rb').read(TEST_BUFF_SIZE)
 
+
+_hash = cffi.FFI().new('unsigned char [64]')
+
 # BENCHMARK
 for FUNC, func in (
+    #('XCSUM', xstore.xstorelib.lib.xcsum),
     ('XHASH', xstore.xstorelib.lib.xhash),
-    ('XCSUM', xstore.xstorelib.lib.xcsum),
 ):
 
     print(f'----- {FUNC}')
@@ -33,7 +37,7 @@ for FUNC, func in (
         t = time.time()
 
         for _ in range (rounds):
-            func(sample, size)
+            func(sample, size, _hash)
 
         t = time.time() - t
 
