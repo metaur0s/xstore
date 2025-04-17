@@ -10,10 +10,10 @@ TEST_BUFF_SIZE = 256*1024*1024
 # SAMPLE DATA
 sample = open('/dev/urandom', 'rb').read(TEST_BUFF_SIZE)
 
-print(base64.b64encode(XHash().done_int(sample, 15)).decode())
-print(base64.b64encode(XHash().done_int(sample, 16)).decode())
-print(base64.b64encode(XHash().done_int(sample, 17)).decode())
-
+for i in range(100):
+    s = 10 + i
+    print(('%0128X' % XHash().done_int(sample, s), s, s%8, ))
+exit(0)
 hasher = XHash()
 
 # BENCHMARK

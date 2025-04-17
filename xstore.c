@@ -24,7 +24,11 @@ typedef uint64_t u64;
 
 #define ASSERT(c) ({ if (!(c)) abort(); })
 
+#if 0
+#define dbg(fmt, ...) ({ fprintf(stderr, fmt, ##__VA_ARGS__); fflush(stderr); })
+#else
 #define dbg(fmt, ...) ({})
+#endif
 
 static inline u64 swap64q (const u64 x, const uint q) {
 
@@ -43,6 +47,10 @@ typedef u64 u64x2  __attribute__ ((vector_size( 2 * sizeof(u64)))); // 128
 typedef u32 u32x16 __attribute__ ((vector_size(16 * sizeof(u32)))); // 512
 typedef u32 u32x8  __attribute__ ((vector_size( 8 * sizeof(u32)))); // 256
 typedef u32 u32x4  __attribute__ ((vector_size( 4 * sizeof(u32)))); // 128
+
+typedef u16 u16x32  __attribute__ ((vector_size(32 * sizeof(u16)))); // 512
+typedef u16 u16x16  __attribute__ ((vector_size(16 * sizeof(u16)))); // 256
+typedef u16 u16x8   __attribute__ ((vector_size( 8 * sizeof(u16)))); // 128
 
 typedef u8 u8x64  __attribute__ ((vector_size(64 * sizeof(u8)))); // 512
 typedef u8 u8x32  __attribute__ ((vector_size(32 * sizeof(u8)))); // 256
@@ -161,12 +169,13 @@ static void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing")))
     #define X (ctx->X)
     #define T (ctx->T)
 
-    dbg("ctx = %p, data = %p, q = %u\n", ctx, data, q);
+    dbg("hash_do(ctx = %p, data = %p, q = %u)\n", ctx, data, q);
+    dbg("hash_do() ctx->tsize = %u, ctx->tmp64 = %016llX\n", ctx->tsize, (uintll)BE64(ctx->tmp64));
 
     while (q) {
            q--;
 
-        T = swap64(T + BE64(*data++));
+        T = swap64(swap64(swap64(swap64(swap64(swap64(swap64(swap64(swap64(BE64(*data++) + T) + A[0]) + A[1]) + A[2]) + A[3]) + A[4]) + A[5]) + A[6]) + A[7]);
 
         // ACCUMULATE
         // TODO: MELHOR SE FOREM X64 PARA NAO PERDER OS OVERFLOWS
@@ -191,6 +200,36 @@ static void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing")))
             // ESCOLHE AS PALAVRAS DESTE VETOR
                ((u8x64) A) & 0b111111U
         );
+
+        union {
+            u64x8 _64_8;
+            u64x4 _64_4[2];
+            u64x2 _64_2[4];
+            u16x32 _16x32;
+            u16x16 _16_16[2];
+            u16x8  _16_8[4];
+
+            u8x32 _8_32[2];
+            u8x16 _8_16[4];
+        } a = { A };
+
+        a._64_4[0] += a._64_4[1];
+        a._64_4[1] += a._64_4[0];
+
+        a._64_2[0] += a._64_2[1];
+        a._64_2[1] += a._64_2[2];
+        a._64_2[2] += a._64_2[3];
+        a._64_2[3] += a._64_2[0];
+
+        a._8_16[0] *= a._8_16[2];
+        a._8_16[1] *= a._8_16[3];
+        a._8_16[2] *= a._8_16[0];
+        a._8_16[3] *= a._8_16[1];
+
+        a._64_4[0] += a._64_4[1];
+        a._64_4[1] += a._64_4[0];
+
+        A = a._64_8;
     }
 
 #undef A
@@ -226,7 +265,9 @@ void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) xhash_
         size -= need;
 
         // ...E COLOCOU NO TEMP
-        if ((ctx->tsize += need) != sizeof(u64)) {
+        ctx->tsize += need;
+
+        if (ctx->tsize != sizeof(u64)) {
             // MAS AINDA NAO TEM UM TEMP COMPLETO
             ASSERT(size == 0);
             return;
@@ -283,8 +324,10 @@ again:
             size -= need;
 
             // ...E COLOCOU NO CTX
-            if ((need = sizeof(u64) - (ctx->tsize + need)))
-                // LIMPA ESTA SOBRINHA
+            ctx->tsize += need;
+
+            // LIMPA ESTA SOBRINHA
+            if ((need = sizeof(u64) - ctx->tsize))
                 memset(ctx->tmp8 + ctx->tsize, 0, need);
 
             // ENTAO ESTA CONSUMINDO ELE
@@ -296,6 +339,8 @@ again:
 
         hash_do(ctx, (u64*)data, size / sizeof(u64));
 
+        ASSERT(ctx->tsize == 0);
+
         // VAI SOBRAR ISSO
         const uint sobra = size % sizeof(u64);
 
@@ -306,6 +351,9 @@ again:
             goto again;
         }
     }
+
+
+
 
     // TODO: REDUCE ALL WORDS
     u64 result [8];
@@ -320,6 +368,8 @@ again:
 
     // SAVE
     memcpy(hash, &result, hash_len);
+
+    ASSERT(ctx->tsize == 0);
 }
 
 static xhash_s* xhash_new (void) {

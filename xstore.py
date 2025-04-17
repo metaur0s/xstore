@@ -41,12 +41,12 @@ class XHash:
         xstorelib.lib.xhash_done(self.ctx, value, size, hash, hash_len)
         hash = bytes(hash)
         assert len(hash) == hash_len
-        print(hash)
+        #print(hash)
         return hash
 
     def done_int(self, value=None, size=None, hash_len=64):
         hash = int.from_bytes(self.done(value, size, hash_len), byteorder='big', signed=False)
-        print(hex(hash), value, size)
+        #print(hex(hash), value, size)
         return hash
 
     def reset (self):
@@ -71,11 +71,19 @@ assert hasher.done(b'') == b"!d\xbb\xfe\xfb\xc8\x14\xb7'\x08\x1d\x88\xa2\x0e\x85
 hasher.release()
 
 
+assert XHash().done_int(b'12345670') == 0x8f8f0ddeee978d9a827f0c6e85ff3e1487c4d4dfd094ed16839f8f7f4a839b591f4ff556f9eebf1fcfdc9f157f2f138dff1b9f74f694ce4ad23d9a3e201e7ddd
+assert XHash().done_int(b'12345671') == 0x3380b36565d4cea5b3a565ef265213f540e5e48ee5d651a5bf792c24f91f7f761f63cdb45385d45c0d54cf24331514cf757823258fdc185362f863fe5f1737e4
+assert XHash().done_int(b'12345672') == 0x1c929c70dd1209b17ead05618a4a87acecdcb1c68fe4ca6fd348a8761732091c5267b10f4949ca0b280bc9da1d64535de8d03e1fd59c5c6d1193ac103198aa57
+assert XHash().done_int(b'12345673') == 0x1b7e8ee0ce46cfba9510f3ec4e2eb37482f23f9bd430ab60d50f55c30f031fd91bdcda028e0988dbbf5560fe30163f8def62c2f28d067f74da7e473dec1e555d
+assert XHash().done_int(b'12345674') == 0x294cb909f8fcefefe6a46f3e2b295564c2a9ee5715fc7be2c04995ca19e954aa154f7c1e017496201e6f21a4ed56fa62ef16784aa667277bb808e4eca33cc93e
+assert XHash().done_int(b'12345675') == 0x5edfa783ca9b4def0f30042fce0c8b117a01172a375af1c11479d6b22fccce0e28a96520d198125ae0360db64cf8171bf1502d32168b1cb0b914cb51cedb2f9a
+assert XHash().done_int(b'12345678') == 0xe7836762257ce7beca9b6f9d680a549022a7d2b2576860c0ea92c83b8d19fdd8134860aaa6e6989834a3e9e9f3a6e5091b644a67c7c0a63b3006a6641929182f
+assert XHash().done_int(b'12345679') == 0x399cb960f9b729938152c09ca1349d4586b71f76d321277adf9977b118cb74e5f8339c2e8702773aeec1b20774cffa762817b4d9b6d977a6b69cd97044bac47a
+assert XHash().done_int(b'1234567A') == 0x296938b978a27417508880d0911aa97d10c0e3d0c507e6b2e41f2433f814f4592a641214b6b8d063a94517d9af14e4005dda5fc11c792a699bc4e9f77590241d
+assert XHash().done_int(b'1234567B') == 0x274be969dd125eb65dd409b4ce6da993fa9bf6b0b72e27229bfa541f9d4ed1a30ca96ddb51525ddc28120d92651cd18974c49ddb95de1c8f386c5d62e62e446d
+assert XHash().done_int(b'1234567C') == 0xe782e562257de7bbca9ecc9d680a549422a75b72576862c0ea92c83c8d19fdd8134909aaa6e6989834a3e7a9f3a6e5091b640127c7c0a63cefc728641929182f
+assert XHash().done_int(b'1234567D') == 0x3169d7d2cfd7b054725b137ed83329647972c76ad60c96ed693ed49752906f576e2d5416ff6607176a3d0fccef0cad22b23bba44c82d6b96ca2dd816178d2595
+assert XHash().done_int(b'1234567E') == 0x695a58ed294e5418ba35050ed37b2ff4176dba36b94dfcc0ba33589d7057d35f6a3e555784fd1d1ff8dc145c58058e4031dd4ae93cbbdfa0f92a0020d70e56cd
+assert XHash().done_int(b'1234567F') == 0xd5c9cf8a0fe550ceb8be96ed92aae1fa89feabd2e57e97c61be4ae0eb60f3b47d66ebcb9feff64d2914c8725360a30a2e27c64bf09aa30b6b2d7fd0d80e225a1
+
 '''
-
-assert XHash().done_int(b'12345678') == 0x49946744098c91100b89c120e6e8848979e7ff3c07337d6a5ecae191787905670ca02067817abb0b590711872933d976126406a0b4a82a964684e44be4bb447a
-assert XHash().done_int(b'12345679') == 0x8002d30112ba1366c1590abba2cde7188153016f006d35668091cebbf23a01208096a7413f58630e8ede1b5e9180a56085d11366e2ef12986a0dcea67d2427bb
-assert XHash().done_int(b'1234567A') == 0xed31fecced6fa8cac7cb76a0cf7357c9005a24cd3ceadb4d410552c3aa9209fab6b23fd8f8fb896bde455d2ed10c4f16c8f50a308c5054ad469bd82e097384d
-assert XHash().done_int(b'1234567B') == 0xed31fecced6fa8cac7cb76a0cf7357c9005a24cd3ceadb4d410552c3aa9209fab6b23fd8f8fb896bde455d2ed10c4f16c8f50a308c5054ad469bd82e097384d
-
-assert False
