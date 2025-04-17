@@ -2,8 +2,10 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 typedef unsigned int uint;
+typedef unsigned long long int uintll;
 
 typedef uint8_t   u8;
 typedef uint32_t u32;
@@ -19,6 +21,10 @@ typedef uint64_t u64;
 #define BE64
 #endif
 #define BE8
+
+#define ASSERT(c) ({ if (!(c)) abort(); })
+
+#define dbg(fmt, ...) ({})
 
 static inline u64 swap64q (const u64 x, const uint q) {
 
@@ -50,6 +56,7 @@ typedef u8 u8x16  __attribute__ ((vector_size(16 * sizeof(u8)))); // 128
 typedef struct xhash_s {
     u64x8 A;
     u64x8 X [X_LEN];
+    u64 T;
     union {
         u64 tmp64;
         u8  tmp8[8];
@@ -138,24 +145,28 @@ static const xhash_s skel = {
         0b1101011001101001010001111010110001001110000101100000100111010110ULL,
         0b0011101111011100000101101100100010000001110010111010100011101111ULL,
         0b1111110100100001001101100010101110010100100000100101110011000111ULL,
-    }}, { 0 }, 0
+    }}, // TODO: PERMITIR INICIALIZAR O T NO CREATE E NO RESET
+        0b0010010101100010001001010110001000100101011000100010010101100010ULL,
+    { 0 }, 0
 };
-
-#define ASSERT(c) ({})
 
 // NOTE: THE HASH IS SAVED BIG ENDIAN
 // TODO: restrict ctx vs ctx->temp?
 static void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) hash_do (xhash_s* const restrict ctx, const u64* restrict data, uint q) {
-#define A (ctx->A)
-#define X (ctx->X)
 
     ASSERT(data != NULL);
-    ASSERT(0 <= q && q <= 2*1024*1024*1024);
+    ASSERT(q <= 2U*1024*1024*1024);
+
+    #define A (ctx->A)
+    #define X (ctx->X)
+    #define T (ctx->T)
+
+    dbg("ctx = %p, data = %p, q = %u\n", ctx, data, q);
 
     while (q) {
            q--;
 
-        const u64 w = BE64(*data++);
+        T = swap64(T + BE64(*data++));
 
         // ACCUMULATE
         // TODO: MELHOR SE FOREM X64 PARA NAO PERDER OS OVERFLOWS
@@ -170,13 +181,13 @@ static void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing")))
                 0b0110001001100010011000100110001001100010011000100110001001100010ULL,
                 0b1100010011000100110001001100010011000100110001001100010011000100ULL,
                 0b1000100110001001100010011000100110001001100010011000100110001000ULL,
-            } ) & w
+            } ) & T
         ;
 
         // E NEM ESSE CAST AQUI
         A += (u64x8) __builtin_shuffle( // TODO: ESSE BUILTIN_SHUFFLE RETORNA MESMO ESTE TIPO?
             // ESCOLHE UM VETOR
-                (u8x64) X [popcount64(w) % X_LEN],
+                (u8x64) X [popcount64(T) % X_LEN],
             // ESCOLHE AS PALAVRAS DESTE VETOR
                ((u8x64) A) & 0b111111U
         );
@@ -187,6 +198,9 @@ static void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing")))
 }
 
 void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) xhash_iter (xhash_s* const restrict ctx, const u8* restrict data, uint size) {
+
+    dbg("xhash_iter(ctx = %p, data = %p, size = %u)\n", ctx, data, size);
+    dbg("xhash_iter() ctx->tsize = %u, ctx->tmp64 = %016llX\n", ctx->tsize, (uintll)BE64(ctx->tmp64));
 
     // NOTE: É SAFE PASSAR DATA NULL COM SIZE 0
     ASSERT(data != NULL || size == 0);
@@ -236,6 +250,9 @@ void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) xhash_
 
 void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) xhash_done (xhash_s* const restrict ctx, const u8* restrict data, uint size, u8* const restrict hash, const uint hash_len) {
 
+    dbg("xhash_done(ctx = %p, data = %p, size = %u)\n", ctx, data, size);
+    dbg("xhash_done() ctx->tsize = %u, ctx->tmp64 = %016llX\n", ctx->tsize, (uintll)BE64(ctx->tmp64));
+
     ASSERT(data != NULL || size == 0);
     ASSERT(hash != NULL || hash_len == 0);
 
@@ -249,8 +266,8 @@ void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) xhash_
 
         // SE TEM, É MANDATÓRIO QUE USE ELE
         if (ctx->tsize) {
-
-            ASSERT(1 <= ctx->tsize && ctx->tsize <= sizeof(u64));
+again:
+            ASSERT(ctx->tsize <= sizeof(u64));
 
             // QUANTO FALTA PARA COMPLETAR
             uint need = sizeof(u64) - ctx->tsize;
@@ -277,14 +294,32 @@ void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) xhash_
             hash_do(ctx, &ctx->tmp64, 1);
         }
 
-        xhash_iter(ctx, data, size);
+        hash_do(ctx, (u64*)data, size / sizeof(u64));
+
+        // VAI SOBRAR ISSO
+        const uint sobra = size % sizeof(u64);
+
+        //
+        if (sobra) {
+            data += size - sobra;
+            size = sobra;
+            goto again;
+        }
     }
 
     // TODO: REDUCE ALL WORDS
+    u64 result [8];
+
+    ASSERT(sizeof(result) == sizeof(ctx->A));
+
+    memcpy(&result, &ctx->A, sizeof(ctx->A));
+
+    // ENDIANESS
+    for (uint i = 0; i != 8; i++)
+        result[i] = BE64(result[i]);
 
     // SAVE
-    // WARNING: ENDIANESS
-    memcpy(hash, &ctx->A, hash_len);
+    memcpy(hash, &result, hash_len);
 }
 
 static xhash_s* xhash_new (void) {
