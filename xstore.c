@@ -50,11 +50,12 @@ typedef u8 u8x16  __attribute__ ((vector_size(16 * sizeof(u8)))); // 128
 
 #define X_LEN 8
 
+#define _XHASH_TSIZE (sizeof(u64x8) - 1)
+
 typedef struct xhash_s {
     u64x8 X [X_LEN];
     u64x8 A;
-    u8 tmp [sizeof(u64x8) - 1];
-    u8 tsize; // TEMP SIZE
+    u8 tmp [sizeof(u64x8)];
 } xhash_s;
 
 // TODO: PERMITIR INICIALIZAR OS PARAMETROS NO CREATE E NO RESET
@@ -141,7 +142,7 @@ static const xhash_s skel = {
         0b0001010111111000100111111000100111001011010000011000000111100101ULL,
         0b0010001110110011101110010101010000101001110100100111001110010010ULL,
     }, // TEMP, TEMP SIZE
-        { 0 }, 0
+        { 0 },
 };
 
 // NOTE: THE HASH IS SAVED BIG ENDIAN
@@ -224,37 +225,33 @@ void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) xhash_
     // NOTE: É SAFE PASSAR DATA NULL COM SIZE 0
     ASSERT(data != NULL || size == 0);
 
-    ASSERT(ctx->tsize <= sizeof(ctx->tmp));
-
     // QUANTO TEM
-    uint chunk = ctx->tsize;
+    uint tsize = ctx->tmp[_XHASH_TSIZE];
 
-    if (chunk) {
+    ASSERT(tsize <= _XHASH_TSIZE);
+
+    if (tsize) {
 
         // QUANTO FALTA PARA COMPLETAR
-        chunk = sizeof(u64x8) - chunk;
+        uint puxar = sizeof(u64x8) - tsize;
 
-        // MAS SÓ PODE PEGAR O QUE TEM
-        if (chunk > size)
-            chunk = size;
+        // SÓ PODE PEGAR O QUE TEM
+        if (puxar > size)
+            puxar = size;
 
-        memcpy(ctx->tmp + ctx->tsize, data, chunk);
+        memcpy(ctx->tmp + tsize, data, puxar);
 
         // TIROU DO BUFFER...
-        data += chunk;
-        size -= chunk;
+        data += puxar;
+        size -= puxar;
 
         // ...E COLOCOU NO TEMP
-        ctx->tsize += chunk;
-
-        if (ctx->tsize != sizeof(u64x8)) {
+        if ((tsize += puxar) != sizeof(u64x8)) {
             // AINDA NAO TEM UM TEMP COMPLETO
             ASSERT(size == 0);
+            ctx->tmp[_XHASH_TSIZE] = tsize;
             return;
         }
-
-        // ENTAO ESTA CONSUMINDO ELE
-        ctx->tsize = 0;
 
         hash_do(ctx, (u64x8*)ctx->tmp, 1);
     }
@@ -267,13 +264,12 @@ void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) xhash_
 
     //
     if (sobra)
-        memcpy(ctx->tmp, data + size - sobra, (ctx->tsize = sobra));
+        memcpy(ctx->tmp, data + size - sobra, sobra);
+
+    ctx->tmp[_XHASH_TSIZE] = sobra;
 }
 
 void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) xhash_done (xhash_s* const restrict ctx, const void* restrict data, uint size, u8* const restrict hash, const uint hash_len) {
-
-    dbg("xhash_done(ctx = %p, data = %p, size = %u)\n", ctx, data, size);
-    dbg("xhash_done() ctx->tsize = %u, ctx->tmp64 = %016llX\n", ctx->tsize, (uintll)BE64(ctx->tmp64));
 
     ASSERT(data != NULL || size == 0);
     ASSERT(hash != NULL || hash_len == 0);
@@ -281,7 +277,7 @@ void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) xhash_
     ASSERT(ctx->tsize <= sizeof(u64));
 
     if (hash_len < sizeof(ctx->A))
-        // FAILED
+        // TODO: FAILED
         return;
 
     if (size) {
