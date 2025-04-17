@@ -27,8 +27,11 @@ ffi.set_source("xstorelib", open('xstore.c').read(), libraries=[],
     ]
 )
 
-ffi.cdef('void xcsum (const unsigned char* restrict, const unsigned int, unsigned char*);')
-ffi.cdef('void xhash (const unsigned char* restrict, const unsigned int, unsigned char*);')
+ffi.cdef('typedef struct ctx_s ctx_s;')
+ffi.cdef('void xcsum (const unsigned char* restrict, const unsigned int, unsigned char* restrict);')
+ffi.cdef('void xhash_iter (ctx_s* const restrict ctx, const unsigned char* restrict, const unsigned int);')
+ffi.cdef('void xhash_done (ctx_s* const restrict ctx, const unsigned char* restrict, const unsigned int, unsigned char* restrict);')
+ffi.cdef('uintptr_t hash_new (void);')
 
 ffi.compile(target=('xstorelib.so'))
 

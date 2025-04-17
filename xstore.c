@@ -1,5 +1,6 @@
 
 #include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 
 typedef unsigned int uint;
@@ -144,7 +145,7 @@ static const ctx_s skel = {
 
 // NOTE: THE HASH IS SAVED BIG ENDIAN
 // TODO: restrict ctx vs ctx->temp?
-void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) _xhash_iter (ctx_s* const restrict ctx, const u64* restrict data, uint q) {
+static void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) _xhash_iter (ctx_s* const restrict ctx, const u64* restrict data, uint q) {
 #define A (ctx->A)
 #define X (ctx->X)
 
@@ -190,12 +191,12 @@ void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) xhash_
     // NOTE: É SAFE PASSAR DATA NULL COM SIZE 0
     ASSERT(data != NULL || size == 0);
 
-    ASSERT(ctx->tsize < sizeof(u64));
+    ASSERT(ctx->tsize <= sizeof(u64));
 
     // SE TEM, É MANDATÓRIO QUE USE ELE
     if (ctx->tsize) {
 
-        ASSERT(1 <= ctx->tsize && ctx->tsize < sizeof(u64));
+        ASSERT(1 <= ctx->tsize && ctx->tsize <= sizeof(u64));
 
         // QUANTO FALTA PARA COMPLETAR
         uint need = sizeof(u64) - ctx->tsize;
@@ -235,12 +236,16 @@ void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) xhash_
 
 void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) xhash_done (ctx_s* const restrict ctx, const u8* restrict data, uint size, u8* const restrict hash) {
 
+    ASSERT(data != NULL || size == 0);
+
+    ASSERT(ctx->tsize <= sizeof(u64));
+
     if (size) {
 
         // SE TEM, É MANDATÓRIO QUE USE ELE
         if (ctx->tsize) {
 
-            ASSERT(1 <= ctx->tsize && ctx->tsize < sizeof(u64));
+            ASSERT(1 <= ctx->tsize && ctx->tsize <= sizeof(u64));
 
             // QUANTO FALTA PARA COMPLETAR
             uint need = sizeof(u64) - ctx->tsize;
@@ -256,13 +261,9 @@ void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) xhash_
             size -= need;
 
             // ...E COLOCOU NO CTX
-            if ((ctx->tsize += need) != sizeof(u64)) {
-                // MAS AINDA NAO TEM UM TEMP COMPLETO
-                // ISSO SIGNIFICA QUE TUDO O QUE TEMOS É UM TEMP INCOMPLETO E NENHUM DATA
-                // USA ESTE TEMP INCOMPLETO
-                ASSERT(size == 0);
-                memset(ctx->tmp8 + ctx->tsize, 0, sizeof(u64) - ctx->tsize);
-            }
+            if ((need = sizeof(u64) - (ctx->tsize + need)))
+                // LIMPA ESTA SOBRINHA
+                memset(ctx->tmp8 + ctx->tsize, 0, need);
 
             // ENTAO ESTA CONSUMINDO ELE
             // VAMOS FAZER ISSO MESMO E PERMITIRAR CONTINUAR USANDO O CONTEXTO =]
@@ -277,6 +278,20 @@ void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) xhash_
     // SAVE
     // WARNING: ENDIANESS
     memcpy(hash, &ctx->A, sizeof(ctx->A));
+}
+
+static uintptr_t hash_new (void) {
+
+    ctx_s* const ctx = aligned_alloc(sizeof(ctx->A), sizeof(ctx_s));
+
+    if (ctx) {
+
+        memcpy(ctx, &skel, sizeof(ctx_s));
+
+        ASSERT(ctx->tsize == 0);
+    }
+
+    return (uintptr_t)ctx;
 }
 
 // FOR SPEED
