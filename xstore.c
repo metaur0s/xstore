@@ -47,16 +47,16 @@ typedef u8 u8x16  __attribute__ ((vector_size(16 * sizeof(u8)))); // 128
 
 #define X_LEN 8
 
-typedef struct ctx_s {
+typedef struct xhash_s {
     u64x8 A;
     u64x8 X [X_LEN];
     union {
         u64 tmp64;
         u8  tmp8[8];
     }; uint tsize; // TEMP SIZE
-} ctx_s;
+} xhash_s;
 
-static const ctx_s skel = {
+static const xhash_s skel = {
     { // A
         0b1111000000100001011100000000110010110000000100101101110111101101ULL,
         0b1101111001010101011010100011000101001110011101000101110000110101ULL,
@@ -145,7 +145,7 @@ static const ctx_s skel = {
 
 // NOTE: THE HASH IS SAVED BIG ENDIAN
 // TODO: restrict ctx vs ctx->temp?
-static void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) _xhash_iter (ctx_s* const restrict ctx, const u64* restrict data, uint q) {
+static void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) hash_do (xhash_s* const restrict ctx, const u64* restrict data, uint q) {
 #define A (ctx->A)
 #define X (ctx->X)
 
@@ -186,7 +186,7 @@ static void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing")))
 #undef B
 }
 
-void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) xhash_iter (ctx_s* const restrict ctx, const u8* restrict data, uint size) {
+void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) xhash_iter (xhash_s* const restrict ctx, const u8* restrict data, uint size) {
 
     // NOTE: É SAFE PASSAR DATA NULL COM SIZE 0
     ASSERT(data != NULL || size == 0);
@@ -221,10 +221,10 @@ void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) xhash_
         // ENTAO ESTA CONSUMINDO ELE
         ctx->tsize = 0;
 
-        _xhash_iter(ctx, &ctx->tmp64, 1);
+        hash_do(ctx, &ctx->tmp64, 1);
     }
 
-    _xhash_iter(ctx, (u64*)data, size / sizeof(u64));
+    hash_do(ctx, (u64*)data, size / sizeof(u64));
 
     // VAI SOBRAR ISSO
     const uint sobra = size % sizeof(u64);
@@ -234,11 +234,16 @@ void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) xhash_
         memcpy(ctx->tmp8, data + size - sobra, (ctx->tsize = sobra));
 }
 
-void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) xhash_done (ctx_s* const restrict ctx, const u8* restrict data, uint size, u8* const restrict hash) {
+void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) xhash_done (xhash_s* const restrict ctx, const u8* restrict data, uint size, u8* const restrict hash, const uint hash_len) {
 
     ASSERT(data != NULL || size == 0);
+    ASSERT(hash != NULL || hash_len == 0);
 
     ASSERT(ctx->tsize <= sizeof(u64));
+
+    if (hash_len < sizeof(ctx->A))
+        // FAILED
+        return;
 
     if (size) {
 
@@ -269,29 +274,36 @@ void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) xhash_
             // VAMOS FAZER ISSO MESMO E PERMITIRAR CONTINUAR USANDO O CONTEXTO =]
             ctx->tsize = 0;
 
-            _xhash_iter(ctx, &ctx->tmp64, 1);
+            hash_do(ctx, &ctx->tmp64, 1);
         }
 
         xhash_iter(ctx, data, size);
     }
 
+    // TODO: REDUCE ALL WORDS
+
     // SAVE
     // WARNING: ENDIANESS
-    memcpy(hash, &ctx->A, sizeof(ctx->A));
+    memcpy(hash, &ctx->A, hash_len);
 }
 
-static uintptr_t hash_new (void) {
+static xhash_s* xhash_new (void) {
 
-    ctx_s* const ctx = aligned_alloc(sizeof(ctx->A), sizeof(ctx_s));
+    xhash_s* const ctx = aligned_alloc(sizeof(ctx->A), sizeof(xhash_s));
 
     if (ctx) {
 
-        memcpy(ctx, &skel, sizeof(ctx_s));
+        memcpy(ctx, &skel, sizeof(xhash_s));
 
         ASSERT(ctx->tsize == 0);
     }
 
-    return (uintptr_t)ctx;
+    return ctx;
+}
+
+static void xhash_free (xhash_s* const ctx) {
+
+    free(ctx);
 }
 
 // FOR SPEED
