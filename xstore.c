@@ -30,16 +30,6 @@ typedef uint64_t u64;
 #define dbg(fmt, ...) ({})
 #endif
 
-static inline u64 swap64q (const u64 x, const uint q) {
-
-    return (x >> q) | (x << (64 - q));
-}
-
-static inline u64 swap64 (const u64 x) {
-
-    return swap64q(x, popcount64(x));
-}
-
 typedef u64 u64x8  __attribute__ ((vector_size( 8 * sizeof(u64)))); // 512
 typedef u64 u64x4  __attribute__ ((vector_size( 4 * sizeof(u64)))); // 256
 typedef u64 u64x2  __attribute__ ((vector_size( 2 * sizeof(u64)))); // 128
@@ -62,26 +52,15 @@ typedef u8 u8x16  __attribute__ ((vector_size(16 * sizeof(u8)))); // 128
 #define X_LEN 8
 
 typedef struct xhash_s {
-    u64x8 A;
     u64x8 X [X_LEN];
-    u64 T;
-    union {
-        u64 tmp64;
-        u8  tmp8[8];
-    }; uint tsize; // TEMP SIZE
+    u64x8 A;
+    u64x8 tmp;
+    uint tsize; // TEMP SIZE
 } xhash_s;
 
+// TODO: PERMITIR INICIALIZAR OS PARAMETROS NO CREATE E NO RESET
 static const xhash_s skel = {
-    { // A
-        0b1111000000100001011100000000110010110000000100101101110111101101ULL,
-        0b1101111001010101011010100011000101001110011101000101110000110101ULL,
-        0b1001011111000010000000000110100111110111110011101100010110000110ULL,
-        0b1011100000010111011100110100110100010110110110000101111111110010ULL,
-        0b1101001010110010111110010101111111101011000010110110101110110010ULL,
-        0b0000000110111001100011100011100110110110010011001110011000001010ULL,
-        0b0001010111111000100111111000100111001011010000011000000111100101ULL,
-        0b0010001110110011101110010101010000101001110100100111001110010010ULL,
-    }, { { // X
+    { { // X
         0b1010100110100010111000110011111110110110000100111100011101011101ULL,
         0b1000011111001101001111010111101100100110100000100101101101100110ULL,
         0b0101010011001110100101010111001101010010010010111100111110001101ULL,
@@ -153,83 +132,88 @@ static const xhash_s skel = {
         0b1101011001101001010001111010110001001110000101100000100111010110ULL,
         0b0011101111011100000101101100100010000001110010111010100011101111ULL,
         0b1111110100100001001101100010101110010100100000100101110011000111ULL,
-    }}, // TODO: PERMITIR INICIALIZAR O T NO CREATE E NO RESET
-        0b0010010101100010001001010110001000100101011000100010010101100010ULL,
-    { 0 }, 0
+    }}, { // A
+        0b1111000000100001011100000000110010110000000100101101110111101101ULL,
+        0b1101111001010101011010100011000101001110011101000101110000110101ULL,
+        0b1001011111000010000000000110100111110111110011101100010110000110ULL,
+        0b1011100000010111011100110100110100010110110110000101111111110010ULL,
+        0b1101001010110010111110010101111111101011000010110110101110110010ULL,
+        0b0000000110111001100011100011100110110110010011001110011000001010ULL,
+        0b0001010111111000100111111000100111001011010000011000000111100101ULL,
+        0b0010001110110011101110010101010000101001110100100111001110010010ULL,
+    }, // TEMP, TEMP SIZE
+        { 0 }, 0
 };
 
 // NOTE: THE HASH IS SAVED BIG ENDIAN
 // TODO: restrict ctx vs ctx->temp?
-static void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) hash_do (xhash_s* const restrict ctx, const u64* restrict data, uint q) {
+static void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) hash_do (xhash_s* const restrict ctx, const u64x8* restrict data, uint q) {
 
-    ASSERT(data != NULL);
-    ASSERT(q <= 2U*1024*1024*1024);
-
-    #define A (ctx->A)
-    #define X (ctx->X)
-    #define T (ctx->T)
-
-    dbg("hash_do(ctx = %p, data = %p, q = %u)\n", ctx, data, q);
-    dbg("hash_do() ctx->tsize = %u, ctx->tmp64 = %016llX\n", ctx->tsize, (uintll)BE64(ctx->tmp64));
+#define A (ctx->A)
+#define X (ctx->X)
 
     while (q) {
            q--;
 
-        T = swap64(swap64(swap64(swap64(swap64(swap64(swap64(swap64(swap64(BE64(*data++) + T) + A[0]) + A[1]) + A[2]) + A[3]) + A[4]) + A[5]) + A[6]) + A[7]);
+        // ORIGINAL
+        u64x8 O = *data++;
 
-        // ACCUMULATE
-        // TODO: MELHOR SE FOREM X64 PARA NAO PERDER OS OVERFLOWS
-        // E AI NAO PRECISARA DESSE CAST AQUI, SÓ UM ALI EMBAIXO
-        X[7] += X[6] += X[5] += X[4] += X[3] += X[2] += X[1] += X[0] += A +=
-            ( (u64x8) {
-                0b0001001100010011000100110001001100010011000100110001001100010011ULL,
-                0b0010011000100110001001100010011000100110001001100010011000100110ULL,
-                0b0100110001001100010011000100110001001100010011000100110001001100ULL,
-                0b1001100010011000100110001001100010011000100110001001100010011000ULL,
-                0b0011000100110001001100010011000100110001001100010011000100110001ULL,
-                0b0110001001100010011000100110001001100010011000100110001001100010ULL,
-                0b1100010011000100110001001100010011000100110001001100010011000100ULL,
-                0b1000100110001001100010011000100110001001100010011000100110001000ULL,
-            } ) & T
-        ;
-
-        // E NEM ESSE CAST AQUI
-        A += (u64x8) __builtin_shuffle( // TODO: ESSE BUILTIN_SHUFFLE RETORNA MESMO ESTE TIPO?
-            // ESCOLHE UM VETOR
-                (u8x64) X [popcount64(T) % X_LEN],
-            // ESCOLHE AS PALAVRAS DESTE VETOR
-               ((u8x64) A) & 0b111111U
+        // INVERT ENDIANESS
+#if 1 // TODO: IS_THIS_LITTLE_ENDIAN ?
+        O = (u64x8) __builtin_shuffle( (u8x64) O,
+            (u8x64) {
+                 7,  6,  5,  4,  3,  2,  1,  0,
+                15, 14, 13, 12, 11, 10,  9,  8,
+                23, 22, 21, 20, 19, 18, 17, 16,
+                31, 30, 29, 28, 27, 26, 25, 24,
+                39, 38, 37, 36, 35, 34, 33, 32,
+                47, 46, 45, 44, 43, 42, 41, 40,
+                55, 54, 53, 52, 51, 50, 49, 48,
+                63, 62, 61, 60, 59, 58, 57, 56
+            }
         );
+#endif
 
-        union {
-            u64x8 _64_8;
-            u64x4 _64_4[2];
-            u64x2 _64_2[4];
-            u16x32 _16x32;
-            u16x16 _16_16[2];
-            u16x8  _16_8[4];
+        // ACCUMULATE AND MIX
+        for (uint i = 0; i != X_LEN; i++) {
 
-            u8x32 _8_32[2];
-            u8x16 _8_16[4];
-        } a = { A };
+            u64x8 q = A + O;
 
-        a._64_4[0] += a._64_4[1];
-        a._64_4[1] += a._64_4[0];
+            // YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+            //                         + >> 32 YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+            //                                 YYYYYYYYYYYYYYYYXXXXXXXXXXXXXXXX
+            //                         + >> 16                 YYYYYYYYYYYYYYYYXXXXXXXXXXXXXXXX
+            //                                                 YYYYYYYYXXXXXXXX
+            //                         + >>  8                         YYYYYYYYXXXXXXXX
+            //                                                         YYXXXXXX
+            //                         + >>  4                             YYXXXXXX
+            //                           &                               XXXXXX
+            q += q >> 32;
+            q += q >> 16;
+            q += q >>  8;
+            q += q >>  4;
 
-        a._64_2[0] += a._64_2[1];
-        a._64_2[1] += a._64_2[2];
-        a._64_2[2] += a._64_2[3];
-        a._64_2[3] += a._64_2[0];
+            // %= 64
+            q &= 0b111111U;
 
-        a._8_16[0] *= a._8_16[2];
-        a._8_16[1] *= a._8_16[3];
-        a._8_16[2] *= a._8_16[0];
-        a._8_16[3] *= a._8_16[1];
+            // SWAP64
+            // O ORIGINAL NAO PERDE NENHUM BIT POIS NAO HA OVERFLOW
+            A += O = (O >> q) | (O << (64 - q));
 
-        a._64_4[0] += a._64_4[1];
-        a._64_4[1] += a._64_4[0];
+            //
+            A += (u64x8) __builtin_shuffle( (u8x64) (X[i]), ((u8x64) A) & 0b111111U );
 
-        A = a._64_8;
+            // OPOSITE X
+            // ESCOLHE UM VETOR
+            // ESCOLHE AS PALAVRAS DESTE VETOR
+            // TODO: ESSE BUILTIN_SHUFFLE RETORNA MESMO ESTE TIPO?
+            // [ (i, (8 - 1) - i) for i in range(8) ]
+            // [(0, 7), (1, 6), (2, 5), (3, 4), (4, 3), (5, 2), (6, 1), (7, 0)]
+            A += (u64x8) __builtin_shuffle( (u8x64) (X[(X_LEN - 1) - i]), ((u8x64) A) & 0b111111U );
+
+            //
+            A = X[i] += A;
+        }
     }
 
 #undef A
@@ -237,9 +221,6 @@ static void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing")))
 }
 
 void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) xhash_iter (xhash_s* const restrict ctx, const u8* restrict data, uint size) {
-
-    dbg("xhash_iter(ctx = %p, data = %p, size = %u)\n", ctx, data, size);
-    dbg("xhash_iter() ctx->tsize = %u, ctx->tmp64 = %016llX\n", ctx->tsize, (uintll)BE64(ctx->tmp64));
 
     // NOTE: É SAFE PASSAR DATA NULL COM SIZE 0
     ASSERT(data != NULL || size == 0);
