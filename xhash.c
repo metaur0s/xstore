@@ -298,21 +298,13 @@ static inline void __optimize xhash_do (xhash_s* const restrict ctx, const u8* r
             // SWAP64Q(O, popcount(A + O))
             xhash_t q = A + O;
 
-            // YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX|
-            //                         + >> 32 YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY|XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-            //                                 YYYYYYYYYYYYYYYYXXXXXXXXXXXXXXXX|
-            //                         + >> 16                 YYYYYYYYYYYYYYYY|XXXXXXXXXXXXXXXX
-            //                                                 YYYYYYYYXXXXXXXX|
-            //                         + >>  8                         YYYYYYYY|XXXXXXXX
-            //                                                         YYXXXXXX|
-            //                         + >>  4                             YYXX|XXXX
-            //                           &                               XXXXXX|
-            q += q >> 32;
-            q += q >> 16;
-            q += q >>  8;
-            q += q >>  4;
+                            // 1111111111111111111111111111111111111111111111111111111111111111|
+            q += q >> 32;   // 0000000000000000000000000000000011111111111111111111111111111111|11111111111111111111111111111111
+            q += q >> 16;   // 0000000000000000000000000000000000000000000000001111111111111111|1111111111111111
+            q += q >>  8;   // 0000000000000000000000000000000000000000000000000000000011111111|11111111
+            q += q >>  4;   // 0000000000000000000000000000000000000000000000000000000000001111|1111
 
-            q &= 0b111111U; // %= 64
+            q &= 0b111111U; // 0000000000000000000000000000000000000000000000000000000000111111|
 
             // O ORIGINAL NAO PERDE NENHUM BIT POIS NAO HA OVERFLOW
             A += O = (O >> q) | (O << (64 - q));
@@ -422,7 +414,9 @@ void __optimize xhash_flush (xhash_s* const restrict ctx, const u8* restrict dat
 
         // NOTE QUE AQUI ESTÁ OVERWRITING TSIZE...
         // ...WITH ITSELF
-        memset(ctx->tmp  + tsize, tsize, sizeof(xhash_t) - tsize);
+        // TODO: PAD USANDO O CHUNK REPETIDAMENTE
+        //       TODO: -> E AI RESTAURA O TSIZE APOS RESTAURAR O BACKUP
+        memset(ctx->tmp + tsize, tsize, sizeof(xhash_t) - tsize);
 
         BUILD_ASSERT((offsetof(xhash_s, tmp) + sizeof(xhash_t))
                    == offsetof(xhash_s, pad));
