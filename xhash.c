@@ -296,7 +296,7 @@ static inline void __optimize xhash_do (xhash_s* const restrict ctx, const u8* r
         for (uint i = 0; i != X_LEN; i++) {
 
             // SWAP64Q(O, popcount(A + O))
-            xhash_t q = A + O;
+            xhash_t q = A += O;
 
                             // 1111111111111111111111111111111111111111111111111111111111111111|
             q += q >> 32;   // 0000000000000000000000000000000011111111111111111111111111111111|11111111111111111111111111111111
@@ -307,18 +307,11 @@ static inline void __optimize xhash_do (xhash_s* const restrict ctx, const u8* r
             q &= 0b111111U; // 0000000000000000000000000000000000000000000000000000000000111111|
 
             // O ORIGINAL NAO PERDE NENHUM BIT POIS NAO HA OVERFLOW
-            A += O = (O >> q) | (O << (64 - q));
+            // TODO: É ISSO MESMO?
+            O = (O >> q) | (O << (64 - q));
 
             //
-            A += (xhash_t) __builtin_shuffle(
-                //
-                 (xhash_bytes_t) (X[i]),
-                //
-                ((xhash_bytes_t) A) & (sizeof(xhash_bytes_t) - 1)
-            );
-
-            //
-            A += (xhash_t) __builtin_shuffle(
+            X[i] += A += (xhash_t) __builtin_shuffle(
                 // OPOSITE INDEX
                 // [ (i, (8 - 1) - i) for i in range(8) ]
                 //      -> [(0, 7), (1, 6), (2, 5), (3, 4), (4, 3), (5, 2), (6, 1), (7, 0)]
@@ -326,9 +319,6 @@ static inline void __optimize xhash_do (xhash_s* const restrict ctx, const u8* r
                 // USE A AS A MAP, TO EXTRACT FROM THE OPOSITE INDEX
                 ((xhash_bytes_t) A) & (sizeof(xhash_bytes_t) - 1)
             );
-
-            //
-            X[i] += A;
         }
     }
 
