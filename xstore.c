@@ -48,14 +48,17 @@ typedef u8 u8x16  __attribute__ ((vector_size(16 * sizeof(u8)))); // 128
 
 // __attribute__((target("popcnt", "avx2")))
 
+#define __optimize __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing")))
+
 #define X_LEN 8
 
 #define _XHASH_TSIZE (sizeof(u64x8) - 1)
 
 typedef struct xhash_s {
-    u64x8 X [X_LEN];
-    u64x8 A;
+    u64x8 X [X_LEN]; // SHUFFLER
+    u64x8 A; // ACCUMULATOR
     u8 tmp [sizeof(u64x8)];
+    u8 pad [sizeof(u64x8)]; // PADDING
 } xhash_s;
 
 // TODO: PERMITIR INICIALIZAR OS PARAMETROS NO CREATE E NO RESET
@@ -141,14 +144,24 @@ static const xhash_s skel = {
         0b0000000110111001100011100011100110110110010011001110011000001010ULL,
         0b0001010111111000100111111000100111001011010000011000000111100101ULL,
         0b0010001110110011101110010101010000101001110100100111001110010010ULL,
-    }, // TEMP, TEMP SIZE
-        { 0 },
+    }, { // TEMP, TEMP SIZE
+        0
+    }, { // PAD
+        0x0B, 0xE9, 0x10, 0x9F, 0xC5, 0xC0, 0x99, 0x1E,
+        0xA7, 0xEE, 0x56, 0xBC, 0xA6, 0xA4, 0x6A, 0xB3,
+        0xE5, 0x21, 0x41, 0xD7, 0x92, 0xE5, 0xA9, 0xFE,
+        0xAD, 0xB0, 0xFB, 0x6C, 0xD3, 0x46, 0xC2, 0x88,
+        0x17, 0x8F, 0x35, 0xD4, 0x14, 0xB0, 0xFD, 0xD9,
+        0x79, 0x46, 0x7C, 0x8B, 0x22, 0x18, 0x21, 0x4D,
+        0x43, 0x1C, 0x1F, 0x33, 0x75, 0xD2, 0x4F, 0xC7,
+        0x2B, 0xE0, 0x2E, 0x20, 0x27, 0x8A, 0x6A, 0xDF
+    }
 };
 
 // NOTE: THE HASH IS SAVED BIG ENDIAN
 // TODO: restrict ctx vs ctx->temp?
 // TODO: UMA VERSAO ALINHADA
-static void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) hash_do (xhash_s* const restrict ctx, const u64x8* restrict data, uint q) {
+static inline void __optimize hash_do (xhash_s* const restrict ctx, const u8* restrict data, uint q) {
 
 #define A (ctx->A)
 #define X (ctx->X)
@@ -159,19 +172,22 @@ static void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing")))
         // ORIGINAL
         u64x8 O; memcpy(&O, data++, sizeof(O));
 
-        // INVERT ENDIANESS
-#if 1 // TODO: IS_THIS_LITTLE_ENDIAN ?
+        //
+        _Static_assert(sizeof(O) == sizeof(ctx->tmp));
+
+        // LOCAL ENDIANESS
+#if 1
         O = (u64x8) __builtin_shuffle( (u8x64) O,
-            (u8x64) {
-                 7,  6,  5,  4,  3,  2,  1,  0,
-                15, 14, 13, 12, 11, 10,  9,  8,
-                23, 22, 21, 20, 19, 18, 17, 16,
-                31, 30, 29, 28, 27, 26, 25, 24,
-                39, 38, 37, 36, 35, 34, 33, 32,
-                47, 46, 45, 44, 43, 42, 41, 40,
-                55, 54, 53, 52, 51, 50, 49, 48,
-                63, 62, 61, 60, 59, 58, 57, 56
-            }
+            (u8x64) ( (u64x8) {
+                0x0001020304050607ULL,
+                0x08090A0B0C0D0E0FULL,
+                0x1011121314151617ULL,
+                0x18191A1B1C1D1E1FULL,
+                0x2021222324252627ULL,
+                0x28292A2B2C2D2E2FULL,
+                0x3031323334353637ULL,
+                0x38393A3B3C3D3E3FULL
+            })
         );
 #endif
 
@@ -220,7 +236,7 @@ static void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing")))
 #undef B
 }
 
-void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) xhash_iter (xhash_s* const restrict ctx, const void* restrict data, uint size) {
+void __optimize xhash_iter (xhash_s* const restrict ctx, const u8* restrict data, uint size) {
 
     // NOTE: É SAFE PASSAR DATA NULL COM SIZE 0
     ASSERT(data != NULL || size == 0);
@@ -228,9 +244,9 @@ void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) xhash_
     // QUANTO TEM
     uint tsize = ctx->tmp[_XHASH_TSIZE];
 
-    ASSERT(tsize <= _XHASH_TSIZE);
-
     if (tsize) {
+
+        ASSERT(tsize <= _XHASH_TSIZE);
 
         // QUANTO FALTA PARA COMPLETAR
         uint puxar = sizeof(u64x8) - tsize;
@@ -253,100 +269,73 @@ void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) xhash_
             return;
         }
 
-        hash_do(ctx, (u64x8*)ctx->tmp, 1);
+        hash_do(ctx, ctx->tmp, 1);
     }
 
     // NAO TEM TEMP
-    hash_do(ctx, (u64x8*)data, size / sizeof(u64x8));
+    hash_do(ctx, data, size / sizeof(u64x8));
 
     // SOBROU ISSO
-    const uint sobra = size % sizeof(u64x8);
+    if ((tsize = size % sizeof(u64x8)))
+        memcpy(ctx->tmp, data + size - tsize, tsize);
 
-    //
-    if (sobra)
-        memcpy(ctx->tmp, data + size - sobra, sobra);
-
-    ctx->tmp[_XHASH_TSIZE] = sobra;
+    ctx->tmp[_XHASH_TSIZE] = tsize;
 }
 
-void __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing"))) xhash_done (xhash_s* const restrict ctx, const void* restrict data, uint size, u8* const restrict hash, const uint hash_len) {
+void __optimize xhash_done (xhash_s* const restrict ctx, const u8* restrict data, uint size, u8* const restrict hash, const uint hash_len) {
 
     ASSERT(data != NULL || size == 0);
     ASSERT(hash != NULL || hash_len == 0);
-
-    ASSERT(ctx->tsize <= sizeof(u64));
 
     if (hash_len < sizeof(ctx->A))
         // TODO: FAILED
         return;
 
-    if (size) {
+    //
+    xhash_iter(ctx, data, size);
 
-        // SE TEM, É MANDATÓRIO QUE USE ELE
-        if (ctx->tsize) {
-again:
-            ASSERT(ctx->tsize <= sizeof(u64));
+    // NA VERDADE NÃO É SÓ UM PAD, VAI USAR ELE INTEIRO MESMO QUE NAO TENHA TEMP
+    const uint tsize = ctx->tmp[_XHASH_TSIZE];
+    const uint psize = sizeof(ctx->tmp) - tsize;
 
-            // QUANTO FALTA PARA COMPLETAR
-            uint need = sizeof(u64) - ctx->tsize;
+    if (psize)
+        memcpy(ctx->tmp + tsize,
+               ctx->pad + tsize, psize);
 
-            // MAS SÓ PODE PEGAR O QUE TEM
-            if (need > size)
-                need = size;
+    //
+    hash_do(ctx, ctx->tmp, sizeof(ctx->tmp));
 
-            memcpy(ctx->tmp8 + ctx->tsize, data, need);
+    //
+    ctx->tmp[_XHASH_TSIZE] = 0;
 
-            // TIROU DO BUFFER...
-            data += need;
-            size -= need;
+    //
+    u64x8 result = ctx->A;
 
-            // ...E COLOCOU NO CTX
-            ctx->tsize += need;
+    // TODO: REDUCE ALL WORDS?
 
-            // LIMPA ESTA SOBRINHA
-            if ((need = sizeof(u64) - ctx->tsize))
-                memset(ctx->tmp8 + ctx->tsize, 0, need);
+    // GLOBAL ENDIANESS
+#if 1
+    result = (u64x8) __builtin_shuffle( (u8x64) result,
+        (u8x64) ( (u64x8) {
+            0x0001020304050607ULL,
+            0x08090A0B0C0D0E0FULL,
+            0x1011121314151617ULL,
+            0x18191A1B1C1D1E1FULL,
+            0x2021222324252627ULL,
+            0x28292A2B2C2D2E2FULL,
+            0x3031323334353637ULL,
+            0x38393A3B3C3D3E3FULL
+        })
+    );
+#endif
 
-            // ENTAO ESTA CONSUMINDO ELE
-            // VAMOS FAZER ISSO MESMO E PERMITIRAR CONTINUAR USANDO O CONTEXTO =]
-            ctx->tsize = 0;
-
-            hash_do(ctx, &ctx->tmp64, 1);
-        }
-
-        hash_do(ctx, (u64*)data, size / sizeof(u64));
-
-        ASSERT(ctx->tsize == 0);
-
-        // VAI SOBRAR ISSO
-        const uint sobra = size % sizeof(u64);
-
-        //
-        if (sobra) {
-            data += size - sobra;
-            size = sobra;
-            goto again;
-        }
-    }
-
-
-
-
-    // TODO: REDUCE ALL WORDS
-    u64 result [8];
-
-    ASSERT(sizeof(result) == sizeof(ctx->A));
-
-    memcpy(&result, &ctx->A, sizeof(ctx->A));
-
-    // ENDIANESS
-    for (uint i = 0; i != 8; i++)
-        result[i] = BE64(result[i]);
+    ASSERT(BE64(ctx->A[0]) == result[0]);
+    ASSERT(BE64(ctx->A[1]) == result[1]);
+    ASSERT(BE64(ctx->A[2]) == result[2]);
+    ASSERT(BE64(ctx->A[3]) == result[3]);
 
     // SAVE
     memcpy(hash, &result, hash_len);
-
-    ASSERT(ctx->tsize == 0);
 }
 
 static xhash_s* xhash_new (void) {
@@ -357,7 +346,7 @@ static xhash_s* xhash_new (void) {
 
         memcpy(ctx, &skel, sizeof(xhash_s));
 
-        ASSERT(ctx->tsize == 0);
+        ASSERT(ctx->tmp[_XHASH_TSIZE] == 0);
     }
 
     return ctx;
