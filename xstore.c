@@ -299,14 +299,14 @@ static inline void __optimize xhash_do (xhash_s* const restrict ctx, const u8* r
             q += q >>  8;
             q += q >>  4;
 
-            q &= 0b111111U; // %= 64
+            q &= 0b111111U; // %= 64 BITS
 
             // SWAP64
             // O ORIGINAL NAO PERDE NENHUM BIT POIS NAO HA OVERFLOW
             A += O = (O >> q) | (O << (64 - q));
 
             //
-            A += (hash_t) __builtin_shuffle( (hash_bytes_t) (X[i]), ((hash_bytes_t) A) & 0b111111U );
+            A += (hash_t) __builtin_shuffle( (hash_bytes_t) (X[i]), ((hash_bytes_t) A) & (sizeof(hash_bytes_t) - 1) );
 
             // OPOSITE X
             // ESCOLHE UM VETOR
@@ -314,7 +314,7 @@ static inline void __optimize xhash_do (xhash_s* const restrict ctx, const u8* r
             // TODO: ESSE BUILTIN_SHUFFLE RETORNA MESMO ESTE TIPO?
             // [ (i, (8 - 1) - i) for i in range(8) ]
             // [(0, 7), (1, 6), (2, 5), (3, 4), (4, 3), (5, 2), (6, 1), (7, 0)]
-            A += (hash_t) __builtin_shuffle( (hash_bytes_t) (X[(X_LEN - 1) - i]), ((hash_bytes_t) A) & 0b111111U );
+            A += (hash_t) __builtin_shuffle( (hash_bytes_t) (X[(X_LEN - 1) - i]), ((hash_bytes_t) A) & (sizeof(hash_bytes_t) - 1) );
 
             //
             A = X[i] += A;
