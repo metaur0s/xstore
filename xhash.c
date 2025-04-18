@@ -393,7 +393,7 @@ void __optimize xhash_flush (xhash_s* const restrict ctx, const u8* restrict dat
                    == offsetof(xhash_s, pad));
 
         // TMP + PAD + TRAIL + V
-        xhash_do(ctx->v, ctx->tmp, (1 + 1 + V_LEN)); // TODO: -1 ?
+        xhash_do(ctx->v, ctx->tmp, (1 + 1 + V_LEN - 1)); // TODO: POR CAUSA DO RESTRICT
 
         //
         verse_v result = ctx->v[V_LEN - 1]; // TODO: RESULT TEM QUE TER OTAMANHO >= hash_len!!!!
