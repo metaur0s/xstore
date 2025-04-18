@@ -4,6 +4,10 @@
 #define XHASH_BITS 256
 #endif
 
+#ifndef XHASH_INVERT_ENDIANESS
+#define XHASH_INVERT_ENDIANESS 0
+#endif
+
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -269,7 +273,7 @@ static inline void __optimize xhash_do (xhash_s* const restrict ctx, const u8* r
         BUILD_ASSERT(sizeof(O) == sizeof(ctx->tmp));
 
         // LOCAL ENDIANESS
-#if 1
+#if XHASH_INVERT_ENDIANESS
         O = (xhash_t) __builtin_shuffle( (xhash_bytes_t) O,
             (xhash_bytes_t) ( (xhash_t) {
                 0x0001020304050607ULL,
@@ -291,6 +295,7 @@ static inline void __optimize xhash_do (xhash_s* const restrict ctx, const u8* r
         // ACCUMULATE AND MIX
         for (uint i = 0; i != X_LEN; i++) {
 
+            // SWAP64Q(O, popcount(A + O))
             xhash_t q = A + O;
 
             // YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX|
@@ -307,31 +312,31 @@ static inline void __optimize xhash_do (xhash_s* const restrict ctx, const u8* r
             q += q >>  8;
             q += q >>  4;
 
-            q &= 0b111111U; // %= 64 BITS
+            q &= 0b111111U; // %= 64
 
-            // SWAP64
             // O ORIGINAL NAO PERDE NENHUM BIT POIS NAO HA OVERFLOW
             A += O = (O >> q) | (O << (64 - q));
 
             //
             A += (xhash_t) __builtin_shuffle(
+                //
                  (xhash_bytes_t) (X[i]),
-                ((xhash_bytes_t) A) & (sizeof(xhash_bytes_t) - 1)
-            );
-
-            // OPOSITE X
-            // ESCOLHE UM VETOR
-            // ESCOLHE AS PALAVRAS DESTE VETOR
-            // TODO: ESSE BUILTIN_SHUFFLE RETORNA MESMO ESTE TIPO?
-            // [ (i, (8 - 1) - i) for i in range(8) ]
-            // [(0, 7), (1, 6), (2, 5), (3, 4), (4, 3), (5, 2), (6, 1), (7, 0)]
-            A += (xhash_t) __builtin_shuffle(
-                 (xhash_bytes_t) (X[(X_LEN - 1) - i]),
+                //
                 ((xhash_bytes_t) A) & (sizeof(xhash_bytes_t) - 1)
             );
 
             //
-            A = X[i] += A;
+            A += (xhash_t) __builtin_shuffle(
+                // OPOSITE INDEX
+                // [ (i, (8 - 1) - i) for i in range(8) ]
+                //      -> [(0, 7), (1, 6), (2, 5), (3, 4), (4, 3), (5, 2), (6, 1), (7, 0)]
+                 (xhash_bytes_t) (X[(X_LEN - 1) - i]),
+                // USE A AS A MAP, TO EXTRACT FROM THE OPOSITE INDEX
+                ((xhash_bytes_t) A) & (sizeof(xhash_bytes_t) - 1)
+            );
+
+            //
+            X[i] += A;
         }
     }
 
@@ -433,27 +438,29 @@ void __optimize xhash_flush (xhash_s* const restrict ctx, const u8* restrict dat
         // TODO: REDUCE ALL WORDS?
 
         // GLOBAL ENDIANESS
-    #if 1
+#if XHASH_INVERT_ENDIANESS
         result = (xhash_t) __builtin_shuffle( (xhash_bytes_t) result,
             (xhash_bytes_t) ( (xhash_t) {
                 0x0001020304050607ULL,
                 0x08090A0B0C0D0E0FULL,
-    #if XHASH_BITS > 128
+#if XHASH_BITS > 128
                 0x1011121314151617ULL,
                 0x18191A1B1C1D1E1FULL,
-    #if XHASH_BITS > 256
+#if XHASH_BITS > 256
                 0x2021222324252627ULL,
                 0x28292A2B2C2D2E2FULL,
                 0x3031323334353637ULL,
                 0x38393A3B3C3D3E3FULL
-    #endif
-    #endif
+#endif
+#endif
             })
         );
-    #endif
+#endif
 
+#if XHASH_INVERT_ENDIANESS
         ASSERT(BE64(ctx->A[0]) == result[0]);
         ASSERT(BE64(ctx->A[1]) == result[1]);
+#endif
 
         // PASS
         memcpy(hash, &result, hash_len);
