@@ -344,14 +344,14 @@ void __optimize xhash_put (xhash_s* const restrict ctx, const u8* restrict data,
     // NOTE: É SAFE PASSAR DATA NULL COM SIZE 0
     ASSERT(data != NULL || size == 0);
 
-    ASSERT(CTX_TSIZE(ctx) < sizeof(ctx->tmp));
+    ASSERT(CTX_TSIZE(ctx) < sizeof(xhash_t));
 
     // QUANTO TEM
     uint tsize = CTX_TSIZE(ctx);
 
     if (tsize) {
 
-        ASSERT(tsize < sizeof(ctx->tmp));
+        ASSERT(tsize < sizeof(xhash_t));
 
         // QUANTO FALTA PARA COMPLETAR
         uint puxar = sizeof(xhash_t) - tsize;
@@ -383,6 +383,8 @@ void __optimize xhash_put (xhash_s* const restrict ctx, const u8* restrict data,
     // SOBROU ISSO
     if ((tsize = size % sizeof(xhash_t)))
         memcpy(ctx->tmp, data + size - tsize, tsize);
+
+    CTX_TSIZE(ctx) = tsize;
 }
 
 void __optimize xhash_flush (xhash_s* const restrict ctx, const u8* restrict data, uint size, u8* const restrict hash, const uint hash_len) {
@@ -391,8 +393,8 @@ void __optimize xhash_flush (xhash_s* const restrict ctx, const u8* restrict dat
     ASSERT(hash != NULL || hash_len == 0);
 
     ASSERT(hash_len <= (sizeof(xhash_t) * (X_LEN + 1)));
-    
-    ASSERT(CTX_TSIZE(ctx) < sizeof(ctx->tmp));
+
+    ASSERT(CTX_TSIZE(ctx) < sizeof(xhash_t));
 
     // ????????
     if (hash_len > (sizeof(xhash_t) * (X_LEN + 1)))
@@ -402,63 +404,65 @@ void __optimize xhash_flush (xhash_s* const restrict ctx, const u8* restrict dat
     //
     xhash_put(ctx, data, size);
 
-const xhash_s backup = *ctx;
+    if (hash_len) {
 
-    // O PUT() CONSUMIU TODO O DATA/SIZE
-    ASSERT(CTX_TSIZE(ctx) < sizeof(ctx->tmp));
+        //
+        const xhash_s backup = *ctx;
 
-    // NA VERDADE NÃO É SÓ UM PAD, VAI USAR ELE INTEIRO MESMO QUE NAO TENHA TEMP
-    const uint tsize = CTX_TSIZE(ctx);
+        // O PUT() CONSUMIU TODO O DATA/SIZE
+        ASSERT(CTX_TSIZE(ctx) < sizeof(xhash_t));
 
-    // NOTE QUE AQUI ESTÁ OVERWRITING TSIZE...
-    // ...WITH ITSELF
-    memset(ctx->tmp  + tsize, tsize,
-    sizeof(ctx->tmp) - tsize);
+        // NA VERDADE NÃO É SÓ UM PAD, VAI USAR ELE INTEIRO MESMO QUE NAO TENHA TEMP
+        const uint tsize = CTX_TSIZE(ctx);
 
-    BUILD_ASSERT((offsetof(xhash_s, tmp) + sizeof(ctx->tmp))
-               == offsetof(xhash_s, pad));
+        // NOTE QUE AQUI ESTÁ OVERWRITING TSIZE...
+        // ...WITH ITSELF
+        memset(ctx->tmp  + tsize, tsize, sizeof(xhash_t) - tsize);
 
-    // TMP + PAD + TRAIL
-    xhash_do(ctx, ctx->tmp, 2);
+        BUILD_ASSERT((offsetof(xhash_s, tmp) + sizeof(xhash_t))
+                   == offsetof(xhash_s, pad));
 
-    //
-    xhash_t result = ctx->A; // TODO: RESULT TEM QUE TER OTAMANHO >= hash_len!!!!
+        // TMP + PAD + TRAIL
+        xhash_do(ctx, ctx->tmp, 2);
 
-    // __builtin_rotateright
+        //
+        xhash_t result = ctx->A; // TODO: RESULT TEM QUE TER OTAMANHO >= hash_len!!!!
 
-    // TODO: REDUCE ALL WORDS?
+        // __builtin_rotateright
 
-    // GLOBAL ENDIANESS
-#if 1
-    result = (xhash_t) __builtin_shuffle( (xhash_bytes_t) result,
-        (xhash_bytes_t) ( (xhash_t) {
-            0x0001020304050607ULL,
-            0x08090A0B0C0D0E0FULL,
-#if XHASH_BITS > 128
-            0x1011121314151617ULL,
-            0x18191A1B1C1D1E1FULL,
-#if XHASH_BITS > 256
-            0x2021222324252627ULL,
-            0x28292A2B2C2D2E2FULL,
-            0x3031323334353637ULL,
-            0x38393A3B3C3D3E3FULL
-#endif
-#endif
-        })
-    );
-#endif
+        // TODO: REDUCE ALL WORDS?
 
-    ASSERT(BE64(ctx->A[0]) == result[0]);
-    ASSERT(BE64(ctx->A[1]) == result[1]);
+        // GLOBAL ENDIANESS
+    #if 1
+        result = (xhash_t) __builtin_shuffle( (xhash_bytes_t) result,
+            (xhash_bytes_t) ( (xhash_t) {
+                0x0001020304050607ULL,
+                0x08090A0B0C0D0E0FULL,
+    #if XHASH_BITS > 128
+                0x1011121314151617ULL,
+                0x18191A1B1C1D1E1FULL,
+    #if XHASH_BITS > 256
+                0x2021222324252627ULL,
+                0x28292A2B2C2D2E2FULL,
+                0x3031323334353637ULL,
+                0x38393A3B3C3D3E3FULL
+    #endif
+    #endif
+            })
+        );
+    #endif
 
-    // PASS
-    memcpy(hash, &result, hash_len);
+        ASSERT(BE64(ctx->A[0]) == result[0]);
+        ASSERT(BE64(ctx->A[1]) == result[1]);
 
+        // PASS
+        memcpy(hash, &result, hash_len);
 
-*ctx = backup;
-    //CTX_TSIZE(ctx) = tsize;
-    //
-    ASSERT(CTX_TSIZE(ctx) == tsize);
+        //
+        *ctx = backup;
+
+        ASSERT(CTX_TSIZE(ctx) == tsize);
+    }
 }
 
 // REINITIALIZE
@@ -484,7 +488,7 @@ xhash_s* xhash_new (void) {
 
 void xhash_free (xhash_s* const ctx) {
 
-    ASSERT(CTX_TSIZE(ctx) < sizeof(ctx->tmp));
+    ASSERT(CTX_TSIZE(ctx) < sizeof(xhash_t));
 
     free(ctx);
 }
