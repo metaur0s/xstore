@@ -233,15 +233,13 @@ static const xhash_s skel = {
 // NOTE: THE HASH IS SAVED BIG ENDIAN
 // TODO: restrict ctx vs ctx->temp?
 // TODO: UMA VERSAO ALINHADA
-static inline void __optimize xhash_do (xhash_s* const restrict ctx, const u8* restrict data, uint q) {
-
-#define X (ctx->X)
+static inline void __optimize xhash_do (verse_v X[WORD_CHARS], const u8* restrict data, uint q) {
 
     while (q) {
            q--;
 
         // ORIGINAL
-        verse_v O; memcpy(&O, data, sizeof(verse_v)); data += sizeof(verse_v);
+        verse_v orig; memcpy(&orig, data, sizeof(verse_v)); data += sizeof(verse_v);
 
         // LOCAL ENDIANESS
 #if XHASH_INVERT_ENDIANESS
@@ -266,25 +264,25 @@ static inline void __optimize xhash_do (xhash_s* const restrict ctx, const u8* r
         // ACCUMULATE AND MIX
         for (uint i = 0; i != WORD_CHARS; i++) { // WORD_CHARS -> TEM QUE SER O NUMERO DE LINHA SOU O DE COLUNAS? OU O MAXIMO DE AMBOS?
 
-            // SWAP64Q(O, popcount(A + O))
-            verse_v q = O;
+            // SWAP BITS OF EVERY WORD
+            verse_v shift = orig;
 
-                                // 1111111111111111111111111111111111111111111111111111111111111111|
-            q.w += q.w >> 32;   // 0000000000000000000000000000000011111111111111111111111111111111|11111111111111111111111111111111
-            q.w += q.w >> 16;   // 0000000000000000000000000000000000000000000000001111111111111111|1111111111111111
-            q.w += q.w >>  8;   // 0000000000000000000000000000000000000000000000000000000011111111|11111111
-            q.w += q.w >>  4;   // 0000000000000000000000000000000000000000000000000000000000001111|1111
+                                        // 1111111111111111111111111111111111111111111111111111111111111111|
+            shift.w += shift.w >> 32;   // 0000000000000000000000000000000011111111111111111111111111111111|11111111111111111111111111111111
+            shift.w += shift.w >> 16;   // 0000000000000000000000000000000000000000000000001111111111111111|1111111111111111
+            shift.w += shift.w >>  8;   // 0000000000000000000000000000000000000000000000000000000011111111|11111111
+            shift.w += shift.w >>  4;   // 0000000000000000000000000000000000000000000000000000000000001111|1111
 
-            q.w &= 0b111111U; // 0000000000000000000000000000000000000000000000000000000000111111|
+            shift.w &= 0b111111U;       // 0000000000000000000000000000000000000000000000000000000000111111|
 
             // USOU O ORIGINAL AGORA ALTERA ELE PARA O PROXIMO USO
             // O ORIGINAL NAO PERDE NENHUM BIT POIS NAO HA OVERFLOW
-            // TODO: É ISSO MESMO?
-            O.w = (O.w >> q.w) | (O.w << (64 - q.w));
+            orig.w = (orig.w >>       shift.w) |
+                     (orig.w << (64 - shift.w));
 
             //
-            O.c = __builtin_shuffle(
-                            O.c,
+            orig.c = __builtin_shuffle(
+                            orig.c,
                 (chars_v) __chars (
                      1,  2,  3,  4,  5,  6, 7,   8, // TODO: DE FORMA COM QUE CADA LINHA PEGUE UMA DE CADA COLUNA
                      9, 10, 11, 12, 13, 14, 15, 16,
@@ -298,7 +296,7 @@ static inline void __optimize xhash_do (xhash_s* const restrict ctx, const u8* r
             );
 
             // TODO: ESQUECE ESSE A
-            X[i].w += O.w;
+            X[i].w += orig.w;
 
             //
             X[i].w += (words_v) __builtin_shuffle(
@@ -311,8 +309,6 @@ static inline void __optimize xhash_do (xhash_s* const restrict ctx, const u8* r
             );
         }
     }
-
-#undef X
 }
 
 void __optimize xhash_put (xhash_s* const restrict ctx, const u8* restrict data, uint size) {
@@ -350,11 +346,11 @@ void __optimize xhash_put (xhash_s* const restrict ctx, const u8* restrict data,
             return;
         }
 
-        xhash_do(ctx, ctx->tmp, 1);
+        xhash_do(ctx->X, ctx->tmp, 1);
     }
 
     // NAO TEM TEMP
-    xhash_do(ctx, data, size / sizeof(words_v));
+    xhash_do(ctx->X, data, size / sizeof(words_v));
 
     // SOBROU ISSO
     if ((tsize = size % sizeof(words_v)))
@@ -401,7 +397,7 @@ void __optimize xhash_flush (xhash_s* const restrict ctx, const u8* restrict dat
                    == offsetof(xhash_s, pad));
 
         // TMP + PAD + TRAIL
-        xhash_do(ctx, ctx->tmp, 2);
+        xhash_do(ctx->X, ctx->tmp, 2);
 
         //
         verse_v result = ctx->X[0]; // TODO: RESULT TEM QUE TER OTAMANHO >= hash_len!!!!
