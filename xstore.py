@@ -5,9 +5,19 @@ import xstorelib
 
 class XHash:
 
+    B = 0
+
+    HASH_LEN = 0
+
+    _new   = None
+    _iter  = None
+    _done  = None
+    _reset = None
+    _free  = None
+
     def __init__ (self):
         self.ctx = None
-        self.ctx = xstorelib.lib.xhash_new()
+        self.ctx = self._new()
         assert self.ctx # TODO: != NULL
 
     def __del__ (self):
@@ -15,48 +25,111 @@ class XHash:
             self.release()
 
     def put (self, value, size=None):
+
         assert self.ctx is not None
         assert isinstance(value, bytes)
         assert isinstance(size, int) or size is None
+
         if size is None:
             size = len(value)
+
         assert 0 <= size <= len(value)
-        xstorelib.lib.xhash_iter(self.ctx, value, size)
+
+        self._iter(self.ctx, value, size)
 
     # TODO: RENAME done -> flush
-    def done (self, value=None, size=None, hash_len=64):
+    def done (self, value=None, size=None, hash_len=None):
+
         assert self.ctx is not None
         assert isinstance(value, bytes) or value is None
         assert isinstance(size, int) or size is None
         assert isinstance(hash_len, int) or hash_len is None
+
         if value is None:
             assert size is None
             # TODO: É PARA PARASSAR NONE -> NULL
             value, size = b'', 0
         elif size is None:
             size = len(value)
+
+        if hash_len is None:
+            hash_len = self.HASH_LEN
+
+        assert isinstance(size, int)
+        assert isinstance(hash_len, int)
+
         assert 0 <= size <= len(value)
-        assert 1 <= hash_len <= 64
+        assert 1 <= hash_len <= self.HASH_LEN, (hash_len, self.HASH_LEN)
+
         hash = cffi.FFI().new('unsigned char [64]')
-        xstorelib.lib.xhash_done(self.ctx, value, size, hash, hash_len)
+
+        self._done(self.ctx, value, size, hash, hash_len)
+
         hash = bytes(hash)[:hash_len]
+
         assert len(hash) == hash_len
         # print(hash)
+
         return hash
 
-    def done_int(self, value=None, size=None, hash_len=64):
+    def done_int(self, value=None, size=None, hash_len=None):
+
+        assert self.ctx is not None
+
         hash = int.from_bytes(self.done(value, size, hash_len), byteorder='big', signed=False)
+
         #print(hex(hash), value, size)
+
         return hash
 
     def reset (self):
-        assert 1 == 2
-        xstorelib.lib.xhash_reset(self.ctx)
+
+        assert self.ctx is not None
+
+        self._reset(self.ctx)
 
     def release (self):
+
         assert self.ctx is not None
+
         self.ctx, ctx = None, self.ctx
-        xstorelib.lib.xhash_free(ctx)
+        self._free(ctx)
+
+class XHash512 (XHash):
+
+    B = 512
+
+    HASH_LEN = 64
+
+    _new   = xstorelib.lib.xhash512_new
+    _iter  = xstorelib.lib.xhash512_iter
+    _done  = xstorelib.lib.xhash512_done
+    _reset = xstorelib.lib.xhash512_reset
+    _free  = xstorelib.lib.xhash512_free
+
+class XHash256 (XHash):
+
+    B = 256
+
+    HASH_LEN = 32
+
+    _new   = xstorelib.lib.xhash256_new
+    _iter  = xstorelib.lib.xhash256_iter
+    _done  = xstorelib.lib.xhash256_done
+    _reset = xstorelib.lib.xhash256_reset
+    _free  = xstorelib.lib.xhash256_free
+
+class XHash128 (XHash):
+
+    B = 128
+
+    HASH_LEN = 16
+
+    _new   = xstorelib.lib.xhash128_new
+    _iter  = xstorelib.lib.xhash128_iter
+    _done  = xstorelib.lib.xhash128_done
+    _reset = xstorelib.lib.xhash128_reset
+    _free  = xstorelib.lib.xhash128_free
 
 '''
 # VERIFY
@@ -88,16 +161,57 @@ assert XHash().done_int(b'1234567F') == 0xd5c9cf8a0fe550ceb8be96ed92aae1fa89feab
 
 '''
 
-# TEST
-for i in range(64):
-    hasher = XHash()
-    hasher.put(b'2F9476AC6BDC0F3BA348493D2951469A87519C1D721E7C33A655DDE6809EA0C0004F42339964E789B0AF0E1A9D7F0000C06A0F1A9D7F0000B0AF0E1A9D7F0000')
-    hasher.put(b'2f9476ac6bdc0f3ba348493d2951469a87519c1d721e7c33a655dde6809ea0c0004f42339964e789b0af0e1a9d7f0000c06a0f1a9d7f0000b0af0e1a9d7f0000')
-    hasher.put(b'2F9476AC6BDC0F3BA348493D2951469A87519C1D721E7C33A655DDE6809EA0C0004F42339964E789B0AF0E1A9D7F0000C06A0F1A9D7F0000B0AF0E1A9D7F0000'[11:11+i])
-    assert hasher.done(hash_len=10) == XHash().done(
-        b'2F9476AC6BDC0F3BA348493D2951469A87519C1D721E7C33A655DDE6809EA0C0004F42339964E789B0AF0E1A9D7F0000C06A0F1A9D7F0000B0AF0E1A9D7F0000' +
-        b'2f9476ac6bdc0f3ba348493d2951469a87519c1d721e7c33a655dde6809ea0c0004f42339964e789b0af0e1a9d7f0000c06a0f1a9d7f0000b0af0e1a9d7f0000' +
-        b'2F9476AC6BDC0F3BA348493D2951469A87519C1D721E7C33A655DDE6809EA0C0004F42339964E789B0AF0E1A9D7F0000C06A0F1A9D7F0000B0AF0E1A9D7F0000'[11:11+i]
-        , hash_len=10)
-    hasher.release()
-    del hasher
+def TEST ():
+
+    def add (x):
+        A.append(x)
+        return x    
+
+    # TEST
+    for XHash, B in ((XHash128, 128), (XHash256, 256), (XHash512, 512)):
+
+        print(XHash, B)
+
+        assert XHash.B == B
+        assert XHash.HASH_LEN == B // 8
+
+        assert len(XHash().done()) == XHash.HASH_LEN
+
+        for i in range(64):
+
+            print(f'---------- {i}')
+
+            hasher, A = XHash(), []
+
+            for _ in range(4):
+
+                print(f'---------- {i} / {_}')
+
+                hasher.reset(), A.clear()
+
+                hasher.put(add(b''))
+                hasher.put(add(b'2f9476ac6bdc0f3ba348493d2951469a87519c1d721e7c33a655dde6809ea0c0004f42339964e789b0af0e1a9d7f0000c06a0f1a9d7f0000b0af0e1a9d7f0000'))
+                hasher.put(add(b'2F9476AC6BDC0F3BA348493D2951469A87519C1D721E7C33A655DDE6809EA0C0004F42339964E789B0AF0E1A9D7F0000C06A0F1A9D7F0000B0AF0E1A9D7F0000'[11:11+i]))
+
+                assert hasher.done(hash_len=10) == XHash().done(b''.join(A), hash_len=10)
+
+                #
+                hasher2 = XHash()
+
+                for a in A:
+                    hasher2.put(a)
+                    
+                assert hasher.done(hash_len=10) == hasher2.done(hash_len=10)
+
+
+                # CONTINUING AFTER DONE VS CONTINUING WITHOUT DONE
+                # TODO: PARA QUE ISSO FUNCIONE, nao pode destruir o tmp
+                assert hasher.done(hash_len=10) == XHash().done(b''.join(A*2), hash_len=10)
+
+            hasher.release()
+
+            del hasher
+
+if __name__ == '__main__':
+
+    TEST()

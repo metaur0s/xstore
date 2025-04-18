@@ -30,7 +30,6 @@ ffi.set_source("xstorelib", open('xstore.c').read(), libraries=[],
 #        "-ffast-math",
         "-march=native",
        # "-fstrict-aliasing"
-       '-DXHASH_BITS=256',
     ]
 )
 
@@ -38,12 +37,14 @@ ffi.set_source("xstorelib", open('xstore.c').read(), libraries=[],
 
 ffi.cdef('typedef uint8_t u8;')
 ffi.cdef('typedef unsigned int uint;')
-ffi.cdef('typedef struct xhash_s xhash_s;')
-#ffi.cdef('void xcsum (const u8* restrict, const uint, u8* restrict);')
-ffi.cdef('void xhash_iter (xhash_s* const restrict ctx, const u8* restrict, const uint);')
-ffi.cdef('void xhash_done (xhash_s* const restrict ctx, const u8* restrict, const uint, void*, const uint);')
-ffi.cdef('xhash_s* xhash_new (void);')
-ffi.cdef('void xhash_free (xhash_s*);')
+
+for B in (128, 256, 512):
+    ffi.cdef(f'typedef struct xhash{B}_s xhash{B}_s;')
+    ffi.cdef(f'void xhash{B}_iter (xhash{B}_s* const restrict ctx, const u8* restrict, const uint);')
+    ffi.cdef(f'void xhash{B}_done (xhash{B}_s* const restrict ctx, const u8* restrict, const uint, void*, const uint);')
+    ffi.cdef(f'xhash{B}_s* xhash{B}_new (void);')
+    ffi.cdef(f'void xhash{B}_reset (xhash{B}_s*);')
+    ffi.cdef(f'void xhash{B}_free (xhash{B}_s*);')
 
 ffi.compile(target=('xstorelib.so'))
 
