@@ -11,39 +11,42 @@ typedef uint32_t u32;
 typedef uint16_t u16;
 typedef uint64_t u64;
 
-#define popcount64 __builtin_popcountll
-
 // TODO:
 #if 1
 #define BE64 __builtin_bswap64
 #else
 #define BE64
 #endif
-#define BE8
 
 #define ASSERT(c) ({ if (!(c)) abort(); })
 
 #define BUILD_ASSERT(c) _Static_assert(c, #c)
 
-typedef u64 u64x8  __attribute__ ((vector_size( 8 * sizeof(u64)))); // 512
-typedef u64 u64x4  __attribute__ ((vector_size( 4 * sizeof(u64)))); // 256
-typedef u64 u64x2  __attribute__ ((vector_size( 2 * sizeof(u64)))); // 128
-
-typedef u32 u32x16 __attribute__ ((vector_size(16 * sizeof(u32)))); // 512
-typedef u32 u32x8  __attribute__ ((vector_size( 8 * sizeof(u32)))); // 256
-typedef u32 u32x4  __attribute__ ((vector_size( 4 * sizeof(u32)))); // 128
-
-typedef u16 u16x32  __attribute__ ((vector_size(32 * sizeof(u16)))); // 512
-typedef u16 u16x16  __attribute__ ((vector_size(16 * sizeof(u16)))); // 256
-typedef u16 u16x8   __attribute__ ((vector_size( 8 * sizeof(u16)))); // 128
-
-typedef u8 u8x64  __attribute__ ((vector_size(64 * sizeof(u8)))); // 512
-typedef u8 u8x32  __attribute__ ((vector_size(32 * sizeof(u8)))); // 256
-typedef u8 u8x16  __attribute__ ((vector_size(16 * sizeof(u8)))); // 128
-
 // __attribute__((target("popcnt", "avx2")))
 
-#define XHASH_BITS 128
+#ifndef XHASH_BITS
+#define XHASH_BITS 512
+#error "XHASH_BITS IS NOT SET"
+#endif
+
+#if XHASH_BITS == 512
+typedef u64 u64x8  __attribute__ ((vector_size( 8 * sizeof(u64)))); 
+typedef u32 u32x16 __attribute__ ((vector_size(16 * sizeof(u32))));
+typedef u16 u16x32 __attribute__ ((vector_size(32 * sizeof(u16))));
+typedef u8  u8x64  __attribute__ ((vector_size(64 * sizeof(u8))));
+#elif XHASH_BITS == 256
+typedef u64 u64x4  __attribute__ ((vector_size( 4 * sizeof(u64))));
+typedef u32 u32x8  __attribute__ ((vector_size( 8 * sizeof(u32))));
+typedef u16 u16x16 __attribute__ ((vector_size(16 * sizeof(u16))));
+typedef u8  u8x32  __attribute__ ((vector_size(32 * sizeof(u8))));
+#elif XHASH_BITS == 128
+typedef u64 u64x2  __attribute__ ((vector_size( 2 * sizeof(u64))));
+typedef u32 u32x4  __attribute__ ((vector_size( 4 * sizeof(u32))));
+typedef u16 u16x8  __attribute__ ((vector_size( 8 * sizeof(u16))));
+typedef u8  u8x16  __attribute__ ((vector_size(16 * sizeof(u8))));
+#else
+#error
+#endif
 
 #define X_LEN 8
 
@@ -55,28 +58,28 @@ typedef u8 u8x16  __attribute__ ((vector_size(16 * sizeof(u8)))); // 128
 #endif
 
 #if XHASH_BITS > 256
-typedef u64x8 hash_t;
-typedef u8x64 hash_bytes_t;
+typedef u64x8 xhash_t;
+typedef u8x64 xhash_bytes_t;
 #elif XHASH_BITS > 128
-typedef u64x4 hash_t;
-typedef u8x32 hash_bytes_t;
+typedef u64x4 xhash_t;
+typedef u8x32 xhash_bytes_t;
 #else
-typedef u64x2 hash_t;
-typedef u8x16 hash_bytes_t;
+typedef u64x2 xhash_t;
+typedef u8x16 xhash_bytes_t;
 #endif
 
 //
-BUILD_ASSERT(sizeof(hash_t)
-          == sizeof(hash_bytes_t));
+BUILD_ASSERT(sizeof(xhash_t)
+          == sizeof(xhash_bytes_t));
 
 // OFFSET OF THE SIZE VALUE
-#define _XHASH_TSIZE (sizeof(hash_t) - 1)
+#define _XHASH_TSIZE (sizeof(xhash_t) - 1)
 
 typedef struct xhash_s {
-    hash_t X [X_LEN]; // SHUFFLER
-    hash_t A; // ACCUMULATOR
-    u8 tmp [sizeof(hash_t)];
-    u8 pad [sizeof(hash_t)]; // PADDING
+    xhash_t X [X_LEN]; // SHUFFLER
+    xhash_t A; // ACCUMULATOR
+    u8 tmp [sizeof(xhash_t)];
+    u8 pad [sizeof(xhash_t)]; // PADDING
 } xhash_s;
 
 #if XHASH_BITS > 256
@@ -255,15 +258,15 @@ static inline void __optimize xhash_do (xhash_s* const restrict ctx, const u8* r
            q--;
 
         // ORIGINAL
-        hash_t O; memcpy(&O, data++, sizeof(O));
+        xhash_t O; memcpy(&O, data++, sizeof(O));
 
         //
         BUILD_ASSERT(sizeof(O) == sizeof(ctx->tmp));
 
         // LOCAL ENDIANESS
 #if 1
-        O = (hash_t) __builtin_shuffle( (hash_bytes_t) O,
-            (hash_bytes_t) ( (hash_t) {
+        O = (xhash_t) __builtin_shuffle( (xhash_bytes_t) O,
+            (xhash_bytes_t) ( (xhash_t) {
                 0x0001020304050607ULL,
                 0x08090A0B0C0D0E0FULL,
 #if XHASH_BITS > 128
@@ -283,7 +286,7 @@ static inline void __optimize xhash_do (xhash_s* const restrict ctx, const u8* r
         // ACCUMULATE AND MIX
         for (uint i = 0; i != X_LEN; i++) {
 
-            hash_t q = A + O;
+            xhash_t q = A + O;
 
             // YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX|
             //                         + >> 32 YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY|XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
@@ -306,7 +309,10 @@ static inline void __optimize xhash_do (xhash_s* const restrict ctx, const u8* r
             A += O = (O >> q) | (O << (64 - q));
 
             //
-            A += (hash_t) __builtin_shuffle( (hash_bytes_t) (X[i]), ((hash_bytes_t) A) & (sizeof(hash_bytes_t) - 1) );
+            A += (xhash_t) __builtin_shuffle(
+                 (xhash_bytes_t) (X[i]),
+                ((xhash_bytes_t) A) & (sizeof(xhash_bytes_t) - 1)
+            );
 
             // OPOSITE X
             // ESCOLHE UM VETOR
@@ -314,7 +320,10 @@ static inline void __optimize xhash_do (xhash_s* const restrict ctx, const u8* r
             // TODO: ESSE BUILTIN_SHUFFLE RETORNA MESMO ESTE TIPO?
             // [ (i, (8 - 1) - i) for i in range(8) ]
             // [(0, 7), (1, 6), (2, 5), (3, 4), (4, 3), (5, 2), (6, 1), (7, 0)]
-            A += (hash_t) __builtin_shuffle( (hash_bytes_t) (X[(X_LEN - 1) - i]), ((hash_bytes_t) A) & (sizeof(hash_bytes_t) - 1) );
+            A += (xhash_t) __builtin_shuffle(
+                 (xhash_bytes_t) (X[(X_LEN - 1) - i]),
+                ((xhash_bytes_t) A) & (sizeof(xhash_bytes_t) - 1)
+            );
 
             //
             A = X[i] += A;
@@ -338,7 +347,7 @@ void __optimize xhash_iter (xhash_s* const restrict ctx, const u8* restrict data
         ASSERT(tsize <= _XHASH_TSIZE);
 
         // QUANTO FALTA PARA COMPLETAR
-        uint puxar = sizeof(u64x8) - tsize;
+        uint puxar = sizeof(xhash_t) - tsize;
 
         // SÓ PODE PEGAR O QUE TEM
         if (puxar > size)
@@ -351,7 +360,7 @@ void __optimize xhash_iter (xhash_s* const restrict ctx, const u8* restrict data
         size -= puxar;
 
         // ...E COLOCOU NO TEMP
-        if ((tsize += puxar) != sizeof(u64x8)) {
+        if ((tsize += puxar) != sizeof(xhash_t)) {
             // AINDA NAO TEM UM TEMP COMPLETO
             ASSERT(size == 0);
             ctx->tmp[_XHASH_TSIZE] = tsize;
@@ -362,10 +371,10 @@ void __optimize xhash_iter (xhash_s* const restrict ctx, const u8* restrict data
     }
 
     // NAO TEM TEMP
-    xhash_do(ctx, data, size / sizeof(u64x8));
+    xhash_do(ctx, data, size / sizeof(xhash_t));
 
     // SOBROU ISSO
-    if ((tsize = size % sizeof(u64x8)))
+    if ((tsize = size % sizeof(xhash_t)))
         memcpy(ctx->tmp, data + size - tsize, tsize);
 
     ctx->tmp[_XHASH_TSIZE] = tsize;
@@ -376,7 +385,8 @@ void __optimize xhash_done (xhash_s* const restrict ctx, const u8* restrict data
     ASSERT(data != NULL || size == 0);
     ASSERT(hash != NULL || hash_len == 0);
 
-    if (hash_len < sizeof(ctx->A))
+    // ????????
+    if (hash_len > (sizeof(xhash_t) * (X_LEN + 1)))
         // TODO: FAILED
         return;
 
@@ -384,7 +394,7 @@ void __optimize xhash_done (xhash_s* const restrict ctx, const u8* restrict data
     xhash_iter(ctx, data, size);
 
     // NA VERDADE NÃO É SÓ UM PAD, VAI USAR ELE INTEIRO MESMO QUE NAO TENHA TEMP
-    const uint tsize = ctx->tmp[_XHASH_TSIZE];
+    const uint tsize =        ctx->tmp[_XHASH_TSIZE];
     const uint psize = sizeof(ctx->tmp) - tsize;
 
     if (psize)
@@ -398,7 +408,7 @@ void __optimize xhash_done (xhash_s* const restrict ctx, const u8* restrict data
     ctx->tmp[_XHASH_TSIZE] = 0;
 
     //
-    hash_t result = ctx->A;
+    xhash_t result = ctx->A;
 
     // __builtin_rotateright
 
@@ -406,8 +416,8 @@ void __optimize xhash_done (xhash_s* const restrict ctx, const u8* restrict data
 
     // GLOBAL ENDIANESS
 #if 1
-    result = (hash_t) __builtin_shuffle( (hash_bytes_t) result,
-        (hash_bytes_t) ( (hash_t) {
+    result = (xhash_t) __builtin_shuffle( (xhash_bytes_t) result,
+        (xhash_bytes_t) ( (xhash_t) {
             0x0001020304050607ULL,
             0x08090A0B0C0D0E0FULL,
 #if XHASH_BITS > 128
