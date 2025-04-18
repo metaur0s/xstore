@@ -7,7 +7,7 @@ from cffi import FFI
 #
 for f in (
     'xstore.o',
-    'xstore.so'
+    'xstore.so',
     'xstorelib.c',
     'xstorelib.o',
     'xstorelib.so',
@@ -40,18 +40,18 @@ ffi.cdef('typedef unsigned int uint;')
 
 for B in (128, 256, 512):
     ffi.cdef(f'typedef struct xhash{B}_s xhash{B}_s;')
-    ffi.cdef(f'void xhash{B}_iter (xhash{B}_s* const restrict ctx, const u8* restrict, const uint);')
-    ffi.cdef(f'void xhash{B}_done (xhash{B}_s* const restrict ctx, const u8* restrict, const uint, void*, const uint);')
-    ffi.cdef(f'xhash{B}_s* xhash{B}_new (void);')
+    ffi.cdef(f'void xhash{B}_put   (xhash{B}_s* const restrict ctx, const u8* restrict, const uint);')
+    ffi.cdef(f'void xhash{B}_flush (xhash{B}_s* const restrict ctx, const u8* restrict, const uint, void*, const uint);')
     ffi.cdef(f'void xhash{B}_reset (xhash{B}_s*);')
     ffi.cdef(f'void xhash{B}_free (xhash{B}_s*);')
+    ffi.cdef(f'xhash{B}_s* xhash{B}_new (void);')
 
 ffi.compile(target=('xstorelib.so'))
 
 #
 for f in (
     'xstore.o',
-    'xstore.so'
+    'xstore.so',
     'xstorelib.c',
     'xstorelib.o',
 ):
