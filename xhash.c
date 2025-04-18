@@ -1,7 +1,7 @@
 
 // TEST
-#ifndef XHASH_BITS
-#define XHASH_BITS 256
+#ifndef VERSE_BITS
+#define VERSE_BITS 256
 #endif
 
 #ifndef XHASH_INVERT_ENDIANESS
@@ -36,8 +36,8 @@ typedef uint64_t u64;
 
 #define BUILD_ASSERT(c) _Static_assert(c, #c)
 
-#define VERSE_WORDS (XHASH_BITS / (sizeof(xword_t) * 8))
-#define VERSE_CHARS (XHASH_BITS / (sizeof(xchar_t) * 8))
+#define VERSE_WORDS (VERSE_BITS / (sizeof(xword_t) * 8))
+#define VERSE_CHARS (VERSE_BITS / (sizeof(xchar_t) * 8))
 
 //
 #define WORD_CHARS (sizeof(xword_t) / sizeof(xchar_t))
@@ -70,21 +70,24 @@ BUILD_ASSERT(sizeof(words_v)
 // THE TEMP SIZE
 #define CTX_TSIZE(ctx) ((ctx)->tmp[sizeof(words_v) - 1])
 
+// TODO: TEM QUE SER O NUMERO DE LINHA SOU O DE COLUNAS? OU O MAXIMO DE AMBOS?
+#define V_LEN WORD_CHARS
+
 typedef struct xhash_s {
-    verse_v X [WORD_CHARS]; // SHUFFLER
     u8 tmp [sizeof(words_v)];
     u8 pad [sizeof(words_v)]; // PADDING
+    verse_v v [V_LEN]; // SHUFFLER
 } xhash_s;
 
-#if XHASH_BITS == 512
+#if VERSE_BITS == 512
 #define __words(w0, w1, w2, w3, w4, w5, w6, w7) { w0, w1, w2, w3, w4, w5, w6, w7 }
-#elif XHASH_BITS == 256
+#elif VERSE_BITS == 256
 #define __words(w0, w1, w2, w3, w4, w5, w6, w7) { w0, w1, w2, w3 }
-#elif XHASH_BITS == 128
+#elif VERSE_BITS == 128
 #define __words(w0, w1, w2, w3, w4, w5, w6, w7) { w0, w1 }
 #endif
 
-#if XHASH_BITS == 512
+#if VERSE_BITS == 512
 #define __chars(                                 \
         c00, c01, c02, c03, c04, c05, c06, c07, \
         c08, c09, c10, c11, c12, c13, c14, c15, \
@@ -104,7 +107,7 @@ typedef struct xhash_s {
         c48, c49, c50, c51, c52, c53, c54, c55, \
         c56, c57, c58, c59, c60, c61, c62, c63  \
     }
-#elif XHASH_BITS == 256
+#elif VERSE_BITS == 256
 #define __chars(                                 \
         c00, c01, c02, c03, c04, c05, c06, c07, \
         c08, c09, c10, c11, c12, c13, c14, c15, \
@@ -120,7 +123,7 @@ typedef struct xhash_s {
         c16, c17, c18, c19, c20, c21, c22, c23, \
         c24, c25, c26, c27, c28, c29, c30, c31  \
     }
-#elif XHASH_BITS == 128
+#elif VERSE_BITS == 128
 #define __chars(                                 \
         c00, c01, c02, c03, c04, c05, c06, c07, \
         c08, c09, c10, c11, c12, c13, c14, c15, \
@@ -138,6 +141,20 @@ typedef struct xhash_s {
 
 // TODO: PERMITIR INICIALIZAR OS PARAMETROS NO CREATE E NO RESET
 static const xhash_s skel = {
+    // TEMP, TEMP SIZE
+    { 0 },
+
+    __chars ( // PAD
+        0x0B, 0xE9, 0x10, 0x9F, 0xC5, 0xC0, 0x99, 0x1E,
+        0xA7, 0xEE, 0x56, 0xBC, 0xA6, 0xA4, 0x6A, 0xB3,
+        0xE5, 0x21, 0x41, 0xD7, 0x92, 0xE5, 0xA9, 0xFE,
+        0xAD, 0xB0, 0xFB, 0x6C, 0xD3, 0x46, 0xC2, 0x88,
+        0x17, 0x8F, 0x35, 0xD4, 0x14, 0xB0, 0xFD, 0xD9,
+        0x79, 0x46, 0x7C, 0x8B, 0x22, 0x18, 0x21, 0x4D,
+        0x43, 0x1C, 0x1F, 0x33, 0x75, 0xD2, 0x4F, 0xC7,
+        0x2B, 0xE0, 0x2E, 0x20, 0x27, 0x8A, 0x6A, 0xDF
+    ),
+
     { // X
         __words (
             0b1010100110100010111000110011111110110110000100111100011101011101ULL,
@@ -212,27 +229,13 @@ static const xhash_s skel = {
             0b0011101111011100000101101100100010000001110010111010100011101111ULL,
             0b1111110100100001001101100010101110010100100000100101110011000111ULL
         )
-    },
-
-    // TEMP, TEMP SIZE
-    { 0 },
-
-    __chars ( // PAD
-        0x0B, 0xE9, 0x10, 0x9F, 0xC5, 0xC0, 0x99, 0x1E,
-        0xA7, 0xEE, 0x56, 0xBC, 0xA6, 0xA4, 0x6A, 0xB3,
-        0xE5, 0x21, 0x41, 0xD7, 0x92, 0xE5, 0xA9, 0xFE,
-        0xAD, 0xB0, 0xFB, 0x6C, 0xD3, 0x46, 0xC2, 0x88,
-        0x17, 0x8F, 0x35, 0xD4, 0x14, 0xB0, 0xFD, 0xD9,
-        0x79, 0x46, 0x7C, 0x8B, 0x22, 0x18, 0x21, 0x4D,
-        0x43, 0x1C, 0x1F, 0x33, 0x75, 0xD2, 0x4F, 0xC7,
-        0x2B, 0xE0, 0x2E, 0x20, 0x27, 0x8A, 0x6A, 0xDF
-    )
+    }
 };
 
 // NOTE: THE HASH IS SAVED BIG ENDIAN
 // TODO: restrict ctx vs ctx->temp?
 // TODO: UMA VERSAO ALINHADA
-static inline void __optimize xhash_do (verse_v X[WORD_CHARS], const u8* restrict data, uint q) {
+static inline void __optimize xhash_do (verse_v v[V_LEN], const u8* restrict data, uint q) {
 
     while (q) {
            q--;
@@ -257,7 +260,7 @@ static inline void __optimize xhash_do (verse_v X[WORD_CHARS], const u8* restric
 #endif
 
         // ACCUMULATE AND MIX
-        for (uint i = 0; i != WORD_CHARS; i++) { // WORD_CHARS -> TEM QUE SER O NUMERO DE LINHA SOU O DE COLUNAS? OU O MAXIMO DE AMBOS?
+        for (uint i = 0; i != V_LEN; i++) {
 
             // SWAP BITS OF EVERY WORD
             verse_v shift = orig;
@@ -292,16 +295,16 @@ static inline void __optimize xhash_do (verse_v X[WORD_CHARS], const u8* restric
             );
 
             // TODO: ESQUECE ESSE A
-            X[i].w += orig.w;
+            v[i].w += orig.w;
 
             //
-            X[i].w += (words_v) __builtin_shuffle(
+            v[i].w += (words_v) __builtin_shuffle(
                 // OPOSITE INDEX
                 // [ (i, (8 - 1) - i) for i in range(8) ]
                 //      -> [(0, 7), (1, 6), (2, 5), (3, 4), (4, 3), (5, 2), (6, 1), (7, 0)]
-                X[(WORD_CHARS - 1) - i].c,
+                v[(V_LEN - 1) - i].c,
                 // USE A AS A MAP, TO EXTRACT FROM THE OPOSITE INDEX
-                X[i].c & (sizeof(chars_v) - 1)
+                v[i].c & (sizeof(chars_v) - 1)
             );
         }
     }
@@ -342,11 +345,11 @@ void __optimize xhash_put (xhash_s* const restrict ctx, const u8* restrict data,
             return;
         }
 
-        xhash_do(ctx->X, ctx->tmp, 1);
+        xhash_do(ctx->v, ctx->tmp, 1);
     }
 
     // NAO TEM TEMP
-    xhash_do(ctx->X, data, size / sizeof(words_v));
+    xhash_do(ctx->v, data, size / sizeof(words_v));
 
     // SOBROU ISSO
     if ((tsize = size % sizeof(words_v)))
@@ -360,12 +363,10 @@ void __optimize xhash_flush (xhash_s* const restrict ctx, const u8* restrict dat
     ASSERT(data != NULL || size == 0);
     ASSERT(hash != NULL || hash_len == 0);
 
-    ASSERT(hash_len <= (sizeof(words_v) * (WORD_CHARS + 1)));
-
     ASSERT(CTX_TSIZE(ctx) < sizeof(words_v));
 
     // ????????
-    if (hash_len > (sizeof(words_v) * (WORD_CHARS + 1)))
+    if (hash_len > sizeof(verse_v))
         // TODO: FAILED
         return;
 
@@ -383,20 +384,19 @@ void __optimize xhash_flush (xhash_s* const restrict ctx, const u8* restrict dat
         // NA VERDADE NÃO É SÓ UM PAD, VAI USAR ELE INTEIRO MESMO QUE NAO TENHA TEMP
         const uint tsize = CTX_TSIZE(ctx);
 
+        // PAD
         // NOTE QUE AQUI ESTÁ OVERWRITING TSIZE...
         // ...WITH ITSELF
-        // TODO: PAD USANDO O CHUNK REPETIDAMENTE
-        //       TODO: -> E AI RESTAURA O TSIZE APOS RESTAURAR O BACKUP
         memset(ctx->tmp + tsize, tsize, sizeof(words_v) - tsize);
 
         BUILD_ASSERT((offsetof(xhash_s, tmp) + sizeof(words_v))
                    == offsetof(xhash_s, pad));
 
-        // TMP + PAD + TRAIL
-        xhash_do(ctx->X, ctx->tmp, 2);
+        // TMP + PAD + TRAIL + V
+        xhash_do(ctx->v, ctx->tmp, (1 + 1 + V_LEN)); // TODO: -1 ?
 
         //
-        verse_v result = ctx->X[0]; // TODO: RESULT TEM QUE TER OTAMANHO >= hash_len!!!!
+        verse_v result = ctx->v[V_LEN - 1]; // TODO: RESULT TEM QUE TER OTAMANHO >= hash_len!!!!
 
         // __builtin_rotateright
 
@@ -419,8 +419,8 @@ void __optimize xhash_flush (xhash_s* const restrict ctx, const u8* restrict dat
 #endif
 
 #if XHASH_INVERT_ENDIANESS
-        ASSERT(BE64(ctx->X.w[0]) == result.w[0]);
-        ASSERT(BE64(ctx->X.w[1]) == result.w[1]);
+        ASSERT(BE64(ctx->v.w[0]) == result.w[0]);
+        ASSERT(BE64(ctx->v.w[1]) == result.w[1]);
 #endif
 
         // PASS

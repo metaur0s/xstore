@@ -1,5 +1,5 @@
 
-#define  XHASH_BITS     512
+#define  VERSE_BITS     512
 #define  words_v        words512_v
 #define  chars_v        chars512_v
 #define  verse_v        verse512_v
@@ -12,7 +12,7 @@
 #define  xhash_free     xhash512_free
 #define  skel           skel512
 #include "xhash.c"
-#undef   XHASH_BITS
+#undef   VERSE_BITS
 #undef   words_v
 #undef   chars_v
 #undef   verse_v
@@ -27,7 +27,7 @@
 #undef   __chars
 #undef   __words
 
-#define  XHASH_BITS     256
+#define  VERSE_BITS     256
 #define  words_v        words256_v
 #define  chars_v        chars256_v
 #define  verse_v        verse256_v
@@ -40,7 +40,7 @@
 #define  xhash_free     xhash256_free
 #define  skel           skel256
 #include "xhash.c"
-#undef   XHASH_BITS
+#undef   VERSE_BITS
 #undef   words_v
 #undef   chars_v
 #undef   verse_v
@@ -55,7 +55,7 @@
 #undef   __chars
 #undef   __words
 
-#define  XHASH_BITS     128
+#define  VERSE_BITS     128
 #define  words_v        words128_v
 #define  chars_v        chars128_v
 #define  verse_v        verse128_v
@@ -68,7 +68,7 @@
 #define  xhash_free     xhash128_free
 #define  skel           skel128
 #include "xhash.c"
-#undef   XHASH_BITS
+#undef   VERSE_BITS
 #undef   words_v
 #undef   chars_v
 #undef   verse_v
