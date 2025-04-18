@@ -383,8 +383,6 @@ void __optimize xhash_put (xhash_s* const restrict ctx, const u8* restrict data,
     // SOBROU ISSO
     if ((tsize = size % sizeof(xhash_t)))
         memcpy(ctx->tmp, data + size - tsize, tsize);
-
-    CTX_TSIZE(ctx) = tsize;
 }
 
 void __optimize xhash_flush (xhash_s* const restrict ctx, const u8* restrict data, uint size, u8* const restrict hash, const uint hash_len) {
@@ -404,21 +402,24 @@ void __optimize xhash_flush (xhash_s* const restrict ctx, const u8* restrict dat
     //
     xhash_put(ctx, data, size);
 
-    const xhash_s backup = *ctx;
+const xhash_s backup = *ctx;
+
+    // O PUT() CONSUMIU TODO O DATA/SIZE
+    ASSERT(CTX_TSIZE(ctx) < sizeof(ctx->tmp));
 
     // NA VERDADE NÃO É SÓ UM PAD, VAI USAR ELE INTEIRO MESMO QUE NAO TENHA TEMP
-    const uint tsize =        CTX_TSIZE(ctx);
-    const uint psize = sizeof(ctx->tmp) - tsize;
+    const uint tsize = CTX_TSIZE(ctx);
 
-    if (psize)
-        memcpy(ctx->tmp + tsize,
-               ctx->pad + tsize, psize);
+    // NOTE QUE AQUI ESTÁ OVERWRITING TSIZE...
+    // ...WITH ITSELF
+    memset(ctx->tmp  + tsize, tsize,
+    sizeof(ctx->tmp) - tsize);
 
-    //
-    xhash_do(ctx, ctx->tmp, 1);
+    BUILD_ASSERT((offsetof(xhash_s, tmp) + sizeof(ctx->tmp))
+               == offsetof(xhash_s, pad));
 
-    //
-//    CTX_TSIZE(ctx) = 0;
+    // TMP + PAD + TRAIL
+    xhash_do(ctx, ctx->tmp, 2);
 
     //
     xhash_t result = ctx->A; // TODO: RESULT TEM QUE TER OTAMANHO >= hash_len!!!!
@@ -453,8 +454,11 @@ void __optimize xhash_flush (xhash_s* const restrict ctx, const u8* restrict dat
     // PASS
     memcpy(hash, &result, hash_len);
 
+
+*ctx = backup;
+    //CTX_TSIZE(ctx) = tsize;
     //
-    *ctx = backup;
+    ASSERT(CTX_TSIZE(ctx) == tsize);
 }
 
 // REINITIALIZE
@@ -479,6 +483,8 @@ xhash_s* xhash_new (void) {
 }
 
 void xhash_free (xhash_s* const ctx) {
+
+    ASSERT(CTX_TSIZE(ctx) < sizeof(ctx->tmp));
 
     free(ctx);
 }

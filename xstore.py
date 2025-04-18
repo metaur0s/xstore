@@ -19,14 +19,17 @@ class XHash:
         self.ctx = None
         self.ctx = self._new()
         assert self.ctx # TODO: != NULL
+        self._hash = cffi.FFI().new('unsigned char [64]')
 
     def __del__ (self):
         if self.ctx is not None:
             self.release()
 
+    # TODO: SUPORTAR UM ARGUMENTO "start" PARA NÃO PRECISAR USAR []
     def put (self, value, size=None):
 
         assert self.ctx is not None
+
         assert isinstance(value, bytes)
         assert isinstance(size, int) or size is None
 
@@ -47,7 +50,7 @@ class XHash:
 
         if value is None:
             assert size is None
-            # TODO: É PARA PARASSAR NONE -> NULL
+            # TODO: É PARA PASSAR NONE -> NULL
             value, size = b'', 0
         elif size is None:
             size = len(value)
@@ -59,13 +62,13 @@ class XHash:
         assert isinstance(hash_len, int)
 
         assert 0 <= size <= len(value)
-        assert 1 <= hash_len <= self.HASH_LEN, (hash_len, self.HASH_LEN)
+        assert 0 <= hash_len <= self.HASH_LEN
 
-        hash = cffi.FFI().new('unsigned char [64]')
+        XXX_hash = cffi.FFI().new('unsigned char [64]')
 
-        self._flush(self.ctx, value, size, hash, hash_len)
+        self._flush(self.ctx, value, size, XXX_hash, hash_len)
 
-        hash = bytes(hash)[:hash_len]
+        hash = bytes(XXX_hash)[:hash_len]
 
         assert len(hash) == hash_len
         # print(hash)
@@ -167,6 +170,10 @@ def TEST ():
         A.append(x)
         return x
 
+    test_data = open('/dev/urandom', 'rb').read(256*1024)
+
+    assert len(test_data) == 256*1024
+
     # TEST
     for XHash, B in ((XHash128, 128), (XHash256, 256), (XHash512, 512)):
 
@@ -177,35 +184,53 @@ def TEST ():
 
         assert len(XHash().flush()) == XHash.HASH_LEN
 
-        for i in range(64):
+        for i in range(XHash.HASH_LEN):
+            assert len(XHash().flush(hash_len=i)) == i
 
-            print(f'---------- {i}')
+        for i in range(64):
 
             hasher, A = XHash(), []
 
-            for _ in range(4):
-
-                print(f'---------- {i} / {_}')
+            # MULTIPLE TIMES, TO REUSE THE SAME CONTEXT
+            for t in range(4):
 
                 hasher.reset() ; A.clear()
 
+                # hasher.put(add(b''))
+                # hasher.put(add(test_data[i*20:i*20 + 24]))
+                # hasher.put(add(test_data[i*45 + 28:i*45 + 28 + 228]))
+
+
                 hasher.put(add(b''))
-                hasher.put(add(b'2f9476ac6bdc0f3ba348493d2951469a87519c1d721e7c33a655dde6809ea0c0004f42339964e789b0af0e1a9d7f0000c06a0f1a9d7f0000b0af0e1a9d7f0000'))
+                hasher.put(add(b''))
+                hasher.put(add(b'2f9476ac6bdc0f3ba348493d2951469a87519c1d721e7c33a655dde6809ea0c0004f42339964e789b0af0e1a9d7f0000c06a0f1a9d7f0000b0af0e1a9d7f0000' * i))
                 hasher.put(add(b'2F9476AC6BDC0F3BA348493D2951469A87519C1D721E7C33A655DDE6809EA0C0004F42339964E789B0AF0E1A9D7F0000C06A0F1A9D7F0000B0AF0E1A9D7F0000'[11:11+i]))
+                hasher.put(add(b'2f9476ac6bdc0f3ba348493d2951469a87519c1d721e7c33a655dde6809ea0c0004f42339964e789b0af0e1a9d7f0000c06a0f1a9d7f0000b0af0e1a9d7f0000' * i))
 
-                assert hasher.flush(hash_len=10) == XHash().flush(b''.join(A), hash_len=10)
+                hash1 = hasher.flush(hash_len=10)
 
-                #
-                hasher2 = XHash()
+                # RODAR DE NOVO TEM QUE DAR NO MESMO
+                assert hash1 == hasher.flush(hash_len=10), 'REPEATED-FLUSH-MISMATCH'
+                assert hash1 == hasher.flush(hash_len=10), 'REPEATED-FLUSH-MISMATCH'
+                assert hash1 == hasher.flush(b'IGNORED-IGNORED-IGNORED-IGNORED', 0, hash_len=10), 'REPEATED-FLUSH-MISMATCH'
+                assert hash1 == hasher.flush(hash_len=10), 'REPEATED-FLUSH-MISMATCH'
 
-                for a in A:
-                    hasher2.put(a)
+                # REPETIR TEM QUE DAR IGUAL
+                for _ in range(10):
 
-                assert hasher.flush(hash_len=10) == hasher2.flush(hash_len=10)
+                    hasher2 = XHash()
+
+                    for a in A:
+                        hasher2.put(a)
+
+                    assert hash1 == hasher2.flush(hash_len=10), 'REPEATED-MISMATCH'
+
+                # TEM QUE RESULTAR NO MESMO QUE RODANDO TUDO DE UMA VEZ SÓ
+                assert hash1 == XHash().flush(b''.join(A), hash_len=10), ('MULTIPLE-VS-SINGLE-MISMATCH', i, t)
 
                 # CONTINUING AFTER DONE VS CONTINUING WITHOUT DONE
                 # TODO: PARA QUE ISSO FUNCIONE, nao pode destruir o tmp
-                assert hasher.flush(hash_len=10) == XHash().flush(b''.join(A*2), hash_len=10)
+                assert hash1 == XHash().flush(b''.join(A), hash_len=10)
 
             hasher.release()
 
