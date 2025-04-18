@@ -14,7 +14,7 @@ for XHash in (XHash128, XHash256, XHash512):
 
     for i in range(100):
         s = 10 + i
-        print(XHash, ('%0128X' % XHash().flush_int(sample, s), s, s%8, ))
+        print(XHash, (f'%0{(XHash.B//8) * 2}x' % XHash().flush_int(sample, s), s, s%8, ))
 
     print()
 

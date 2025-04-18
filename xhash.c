@@ -14,7 +14,6 @@
 #include <stdio.h> // DEBUG / ASSERT
 
 typedef unsigned int uint;
-typedef unsigned long long int uintll;
 
 typedef uint8_t   u8;
 typedef uint32_t u32;
@@ -34,17 +33,15 @@ typedef uint64_t u64;
         abort(); \
     } \
 })
-    //} else {  fprintf(stderr, "OK @ %s:%d\n", __func__, __LINE__); }
 
 #define BUILD_ASSERT(c) _Static_assert(c, #c)
-
-// __attribute__((target("popcnt", "avx2")))
 
 #define VERSE_WORDS (XHASH_BITS / (sizeof(xword_t) * 8))
 #define VERSE_CHARS (XHASH_BITS / (sizeof(xchar_t) * 8))
 
 //
 #define WORD_CHARS (sizeof(xword_t) / sizeof(xchar_t))
+#define WORD_BITS (sizeof(xword_t) * 8) // 0b111111U
 
 typedef u64 xword_t;
 typedef u8  xchar_t;
@@ -56,6 +53,8 @@ typedef union verse_v {
     words_v w;
     chars_v c;
 } verse_v;
+
+// __attribute__((target("popcnt", "avx2")))
 
 #if defined(__clang__)
 #define __optimize // TODO:
@@ -78,62 +77,62 @@ typedef struct xhash_s {
 } xhash_s;
 
 #if XHASH_BITS == 512
-#define __words(x0, x1, x2, x3, x4, x5, x6, x7) { x0, x1, x2, x3, x4, x5, x6, x7 }
+#define __words(w0, w1, w2, w3, w4, w5, w6, w7) { w0, w1, w2, w3, w4, w5, w6, w7 }
 #elif XHASH_BITS == 256
-#define __words(x0, x1, x2, x3, x4, x5, x6, x7) { x0, x1, x2, x3 }
+#define __words(w0, w1, w2, w3, w4, w5, w6, w7) { w0, w1, w2, w3 }
 #elif XHASH_BITS == 128
-#define __words(x0, x1, x2, x3, x4, x5, x6, x7) { x0, x1 }
+#define __words(w0, w1, w2, w3, w4, w5, w6, w7) { w0, w1 }
 #endif
 
 #if XHASH_BITS == 512
 #define __chars(                                 \
-        x00, x01, x02, x03, x04, x05, x06, x07, \
-        x08, x09, x10, x11, x12, x13, x14, x15, \
-        x16, x17, x18, x19, x20, x21, x22, x23, \
-        x24, x25, x26, x27, x28, x29, x30, x31, \
-        x32, x33, x34, x35, x36, x37, x38, x39, \
-        x40, x41, x42, x43, x44, x45, x46, x47, \
-        x48, x49, x50, x51, x52, x53, x54, x55, \
-        x56, x57, x58, x59, x60, x61, x62, x63  \
+        c00, c01, c02, c03, c04, c05, c06, c07, \
+        c08, c09, c10, c11, c12, c13, c14, c15, \
+        c16, c17, c18, c19, c20, c21, c22, c23, \
+        c24, c25, c26, c27, c28, c29, c30, c31, \
+        c32, c33, c34, c35, c36, c37, c38, c39, \
+        c40, c41, c42, c43, c44, c45, c46, c47, \
+        c48, c49, c50, c51, c52, c53, c54, c55, \
+        c56, c57, c58, c59, c60, c61, c62, c63  \
     ) {                                         \
-        x00, x01, x02, x03, x04, x05, x06, x07, \
-        x08, x09, x10, x11, x12, x13, x14, x15, \
-        x16, x17, x18, x19, x20, x21, x22, x23, \
-        x24, x25, x26, x27, x28, x29, x30, x31, \
-        x32, x33, x34, x35, x36, x37, x38, x39, \
-        x40, x41, x42, x43, x44, x45, x46, x47, \
-        x48, x49, x50, x51, x52, x53, x54, x55, \
-        x56, x57, x58, x59, x60, x61, x62, x63  \
+        c00, c01, c02, c03, c04, c05, c06, c07, \
+        c08, c09, c10, c11, c12, c13, c14, c15, \
+        c16, c17, c18, c19, c20, c21, c22, c23, \
+        c24, c25, c26, c27, c28, c29, c30, c31, \
+        c32, c33, c34, c35, c36, c37, c38, c39, \
+        c40, c41, c42, c43, c44, c45, c46, c47, \
+        c48, c49, c50, c51, c52, c53, c54, c55, \
+        c56, c57, c58, c59, c60, c61, c62, c63  \
     }
 #elif XHASH_BITS == 256
 #define __chars(                                 \
-        x00, x01, x02, x03, x04, x05, x06, x07, \
-        x08, x09, x10, x11, x12, x13, x14, x15, \
-        x16, x17, x18, x19, x20, x21, x22, x23, \
-        x24, x25, x26, x27, x28, x29, x30, x31, \
-        x32, x33, x34, x35, x36, x37, x38, x39, \
-        x40, x41, x42, x43, x44, x45, x46, x47, \
-        x48, x49, x50, x51, x52, x53, x54, x55, \
-        x56, x57, x58, x59, x60, x61, x62, x63  \
+        c00, c01, c02, c03, c04, c05, c06, c07, \
+        c08, c09, c10, c11, c12, c13, c14, c15, \
+        c16, c17, c18, c19, c20, c21, c22, c23, \
+        c24, c25, c26, c27, c28, c29, c30, c31, \
+        c32, c33, c34, c35, c36, c37, c38, c39, \
+        c40, c41, c42, c43, c44, c45, c46, c47, \
+        c48, c49, c50, c51, c52, c53, c54, c55, \
+        c56, c57, c58, c59, c60, c61, c62, c63  \
     ) {                                         \
-        x00, x01, x02, x03, x04, x05, x06, x07, \
-        x08, x09, x10, x11, x12, x13, x14, x15, \
-        x16, x17, x18, x19, x20, x21, x22, x23, \
-        x24, x25, x26, x27, x28, x29, x30, x31  \
+        c00, c01, c02, c03, c04, c05, c06, c07, \
+        c08, c09, c10, c11, c12, c13, c14, c15, \
+        c16, c17, c18, c19, c20, c21, c22, c23, \
+        c24, c25, c26, c27, c28, c29, c30, c31  \
     }
 #elif XHASH_BITS == 128
 #define __chars(                                 \
-        x00, x01, x02, x03, x04, x05, x06, x07, \
-        x08, x09, x10, x11, x12, x13, x14, x15, \
-        x16, x17, x18, x19, x20, x21, x22, x23, \
-        x24, x25, x26, x27, x28, x29, x30, x31, \
-        x32, x33, x34, x35, x36, x37, x38, x39, \
-        x40, x41, x42, x43, x44, x45, x46, x47, \
-        x48, x49, x50, x51, x52, x53, x54, x55, \
-        x56, x57, x58, x59, x60, x61, x62, x63  \
+        c00, c01, c02, c03, c04, c05, c06, c07, \
+        c08, c09, c10, c11, c12, c13, c14, c15, \
+        c16, c17, c18, c19, c20, c21, c22, c23, \
+        c24, c25, c26, c27, c28, c29, c30, c31, \
+        c32, c33, c34, c35, c36, c37, c38, c39, \
+        c40, c41, c42, c43, c44, c45, c46, c47, \
+        c48, c49, c50, c51, c52, c53, c54, c55, \
+        c56, c57, c58, c59, c60, c61, c62, c63  \
     ) {                                         \
-        x00, x01, x02, x03, x04, x05, x06, x07, \
-        x08, x09, x10, x11, x12, x13, x14, x15  \
+        c00, c01, c02, c03, c04, c05, c06, c07, \
+        c08, c09, c10, c11, c12, c13, c14, c15  \
     }
 #endif
 
@@ -244,20 +243,16 @@ static inline void __optimize xhash_do (verse_v X[WORD_CHARS], const u8* restric
         // LOCAL ENDIANESS
 #if XHASH_INVERT_ENDIANESS
         O.c = __builtin_shuffle( O.c,
-            (chars_v) {
+            (chars_v) __chars (
                 7,  6,  5,  4,  3,  2,  1,  0,
                15, 14, 13, 12, 11, 10,  9,  8,
-#if XHASH_BITS > 128
                23, 22, 21, 20, 19, 18, 17, 16,
                31, 30, 29, 28, 27, 26, 25, 24,
-#if XHASH_BITS > 256
                39, 38, 37, 36, 35, 34, 33, 32,
                47, 46, 45, 44, 43, 42, 41, 40,
                55, 54, 53, 52, 51, 50, 49, 48,
                63, 62, 61, 60, 59, 58, 57, 56
-#endif
-#endif
-            }
+            )
         );
 #endif
 
@@ -267,31 +262,32 @@ static inline void __optimize xhash_do (verse_v X[WORD_CHARS], const u8* restric
             // SWAP BITS OF EVERY WORD
             verse_v shift = orig;
 
-                                        // 1111111111111111111111111111111111111111111111111111111111111111|
-            shift.w += shift.w >> 32;   // 0000000000000000000000000000000011111111111111111111111111111111|11111111111111111111111111111111
-            shift.w += shift.w >> 16;   // 0000000000000000000000000000000000000000000000001111111111111111|1111111111111111
-            shift.w += shift.w >>  8;   // 0000000000000000000000000000000000000000000000000000000011111111|11111111
-            shift.w += shift.w >>  4;   // 0000000000000000000000000000000000000000000000000000000000001111|1111
-
-            shift.w &= 0b111111U;       // 0000000000000000000000000000000000000000000000000000000000111111|
+                                      // 1111111111111111111111111111111111111111111111111111111111111111|
+            shift.w += shift.w >> 32; // 0000000000000000000000000000000011111111111111111111111111111111|11111111111111111111111111111111
+            shift.w += shift.w >> 16; // 0000000000000000000000000000000000000000000000001111111111111111|1111111111111111
+            shift.w += shift.w >>  8; // 0000000000000000000000000000000000000000000000000000000011111111|11111111
+            shift.w += shift.w >>  4; // 0000000000000000000000000000000000000000000000000000000000001111|1111
+            shift.w &= WORD_BITS - 1; // 0000000000000000000000000000000000000000000000000000000000111111|
 
             // USOU O ORIGINAL AGORA ALTERA ELE PARA O PROXIMO USO
             // O ORIGINAL NAO PERDE NENHUM BIT POIS NAO HA OVERFLOW
-            orig.w = (orig.w >>       shift.w) |
-                     (orig.w << (64 - shift.w));
+            orig.w = (orig.w >>              shift.w) |
+                     (orig.w << (WORD_BITS - shift.w));
 
             //
-            orig.c = __builtin_shuffle(
-                            orig.c,
+            orig.c = __builtin_shuffle( orig.c,
                 (chars_v) __chars (
-                     1,  2,  3,  4,  5,  6, 7,   8, // TODO: DE FORMA COM QUE CADA LINHA PEGUE UMA DE CADA COLUNA
-                     9, 10, 11, 12, 13, 14, 15, 16,
-                    17, 18, 19, 20, 21, 22, 23, 24,
-                    25, 26, 27, 28, 29, 30, 31, 32,
-                    33, 34, 35, 36, 37, 38, 39, 40,
-                    41, 42, 43, 44, 45, 46, 47, 48,
-                    49, 50, 51, 52, 53, 54, 55, 56,
-                    57, 58, 59, 60, 61, 62, 63,  0
+                    // CADA LINHA TERA UM CARACTERE DE CADA LINHA, MAS MUDA TAMBEM O SEU CARACTERE DE LUGAR
+                    // [ print(', '.join( '%2d' % lines[c][i] for c in range(8) )) for i in range(8)  ]
+                    // [ print(', '.join(sorted([ '%2d' % lines[c][i] for c in range(8) ], reverse=True))) for i in range(8)  ]
+                    56, 48, 40, 32, 24, 16,  8, 0,
+                    57, 49, 41, 33, 25, 17,  9, 1,
+                    58, 50, 42, 34, 26, 18, 10, 2,
+                    59, 51, 43, 35, 27, 19, 11, 3,
+                    60, 52, 44, 36, 28, 20, 12, 4,
+                    61, 53, 45, 37, 29, 21, 13, 5,
+                    62, 54, 46, 38, 30, 22, 14, 6,
+                    63, 55, 47, 39, 31, 23, 15, 7
                 )
             );
 
@@ -408,21 +404,16 @@ void __optimize xhash_flush (xhash_s* const restrict ctx, const u8* restrict dat
 
         // GLOBAL ENDIANESS
 #if XHASH_INVERT_ENDIANESS
-        result.c = __builtin_shuffle(
-                    result.c,
+        result.c = __builtin_shuffle( result.c,
             (chars_v) __chars (
                 7,  6,  5,  4,  3,  2,  1,  0,
                15, 14, 13, 12, 11, 10,  9,  8,
-#if XHASH_BITS > 128
                23, 22, 21, 20, 19, 18, 17, 16,
                31, 30, 29, 28, 27, 26, 25, 24,
-#if XHASH_BITS > 256
                39, 38, 37, 36, 35, 34, 33, 32,
                47, 46, 45, 44, 43, 42, 41, 40,
                55, 54, 53, 52, 51, 50, 49, 48,
                63, 62, 61, 60, 59, 58, 57, 56
-#endif
-#endif
             )
         );
 #endif
