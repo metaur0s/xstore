@@ -82,6 +82,10 @@ def gen_bytes ():
 
         print('---')
 
+gen_hex()
+
+
+
 for _ in range(9):
     gen_binary()
     print('')

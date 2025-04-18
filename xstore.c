@@ -57,13 +57,13 @@ typedef u8  u8x16  __attribute__ ((vector_size(16 * sizeof(u8))));
 #define __optimize __attribute__((optimize("-O3", "-ffast-math", "-fstrict-aliasing")))
 #endif
 
-#if XHASH_BITS > 256
+#if XHASH_BITS == 512
 typedef u64x8 xhash_t;
 typedef u8x64 xhash_bytes_t;
-#elif XHASH_BITS > 128
+#elif XHASH_BITS == 256
 typedef u64x4 xhash_t;
 typedef u8x32 xhash_bytes_t;
-#else
+#elif XHASH_BITS == 128
 typedef u64x2 xhash_t;
 typedef u8x16 xhash_bytes_t;
 #endif
@@ -82,15 +82,15 @@ typedef struct xhash_s {
     u8 pad [sizeof(xhash_t)]; // PADDING
 } xhash_s;
 
-#if XHASH_BITS > 256
+#if XHASH_BITS == 512
 #define __v_8(x0, x1, x2, x3, x4, x5, x6, x7) { x0, x1, x2, x3, x4, x5, x6, x7 }
-#elif XHASH_BITS > 128
+#elif XHASH_BITS == 256
 #define __v_8(x0, x1, x2, x3, x4, x5, x6, x7) { x0, x1, x2, x3 }
-#else
+#elif XHASH_BITS == 128
 #define __v_8(x0, x1, x2, x3, x4, x5, x6, x7) { x0, x1 }
 #endif
 
-#if XHASH_BITS > 256
+#if XHASH_BITS == 512
 #define __v_64(                                 \
         x00, x01, x02, x03, x04, x05, x06, x07, \
         x08, x09, x10, x11, x12, x13, x14, x15, \
@@ -110,7 +110,7 @@ typedef struct xhash_s {
         x48, x49, x50, x51, x52, x53, x54, x55, \
         x56, x57, x58, x59, x60, x61, x62, x63  \
     }
-#elif XHASH_BITS > 128
+#elif XHASH_BITS == 256
 #define __v_64(                                 \
         x00, x01, x02, x03, x04, x05, x06, x07, \
         x08, x09, x10, x11, x12, x13, x14, x15, \
@@ -126,7 +126,7 @@ typedef struct xhash_s {
         x16, x17, x18, x19, x20, x21, x22, x23, \
         x24, x25, x26, x27, x28, x29, x30, x31  \
     }
-#else
+#elif XHASH_BITS == 128
 #define __v_64(                                 \
         x00, x01, x02, x03, x04, x05, x06, x07, \
         x08, x09, x10, x11, x12, x13, x14, x15, \
@@ -258,7 +258,7 @@ static inline void __optimize xhash_do (xhash_s* const restrict ctx, const u8* r
            q--;
 
         // ORIGINAL
-        xhash_t O; memcpy(&O, data++, sizeof(O));
+        xhash_t O; memcpy(&O, data, sizeof(xhash_t)); data += sizeof(xhash_t);
 
         //
         BUILD_ASSERT(sizeof(O) == sizeof(ctx->tmp));
@@ -402,7 +402,7 @@ void __optimize xhash_done (xhash_s* const restrict ctx, const u8* restrict data
                ctx->pad + tsize, psize);
 
     //
-    xhash_do(ctx, ctx->tmp, sizeof(ctx->tmp));
+    xhash_do(ctx, ctx->tmp, 1);
 
     //
     ctx->tmp[_XHASH_TSIZE] = 0;

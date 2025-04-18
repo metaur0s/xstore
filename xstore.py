@@ -39,9 +39,9 @@ class XHash:
         assert 1 <= hash_len <= 64
         hash = cffi.FFI().new('unsigned char [64]')
         xstorelib.lib.xhash_done(self.ctx, value, size, hash, hash_len)
-        hash = bytes(hash)
+        hash = bytes(hash)[:hash_len]
         assert len(hash) == hash_len
-        #print(hash)
+        # print(hash)
         return hash
 
     def done_int(self, value=None, size=None, hash_len=64):
@@ -87,3 +87,17 @@ assert XHash().done_int(b'1234567E') == 0x695a58ed294e5418ba35050ed37b2ff4176dba
 assert XHash().done_int(b'1234567F') == 0xd5c9cf8a0fe550ceb8be96ed92aae1fa89feabd2e57e97c61be4ae0eb60f3b47d66ebcb9feff64d2914c8725360a30a2e27c64bf09aa30b6b2d7fd0d80e225a1
 
 '''
+
+# TEST
+for i in range(64):
+    hasher = XHash()
+    hasher.put(b'2F9476AC6BDC0F3BA348493D2951469A87519C1D721E7C33A655DDE6809EA0C0004F42339964E789B0AF0E1A9D7F0000C06A0F1A9D7F0000B0AF0E1A9D7F0000')
+    hasher.put(b'2f9476ac6bdc0f3ba348493d2951469a87519c1d721e7c33a655dde6809ea0c0004f42339964e789b0af0e1a9d7f0000c06a0f1a9d7f0000b0af0e1a9d7f0000')
+    hasher.put(b'2F9476AC6BDC0F3BA348493D2951469A87519C1D721E7C33A655DDE6809EA0C0004F42339964E789B0AF0E1A9D7F0000C06A0F1A9D7F0000B0AF0E1A9D7F0000'[11:11+i])
+    assert hasher.done(hash_len=10) == XHash().done(
+        b'2F9476AC6BDC0F3BA348493D2951469A87519C1D721E7C33A655DDE6809EA0C0004F42339964E789B0AF0E1A9D7F0000C06A0F1A9D7F0000B0AF0E1A9D7F0000' +
+        b'2f9476ac6bdc0f3ba348493d2951469a87519c1d721e7c33a655dde6809ea0c0004f42339964e789b0af0e1a9d7f0000c06a0f1a9d7f0000b0af0e1a9d7f0000' +
+        b'2F9476AC6BDC0F3BA348493D2951469A87519C1D721E7C33A655DDE6809EA0C0004F42339964E789B0AF0E1A9D7F0000C06A0F1A9D7F0000B0AF0E1A9D7F0000'[11:11+i]
+        , hash_len=10)
+    hasher.release()
+    del hasher

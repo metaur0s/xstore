@@ -13,7 +13,7 @@ sample = open('/dev/urandom', 'rb').read(TEST_BUFF_SIZE)
 for i in range(100):
     s = 10 + i
     print(('%0128X' % XHash().done_int(sample, s), s, s%8, ))
-exit(0)
+# exit(0)
 hasher = XHash()
 
 # BENCHMARK
