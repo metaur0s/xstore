@@ -110,11 +110,12 @@ typedef struct xhash_s {
 // TODO: UMA VERSAO ALINHADA E OPTIMIZADA, DESTRUTIVEL DAA
 static inline void __optimize xhash_do (xhash_s* const ctx, const u8* restrict data, uint q) {
 
+    ASSERT(q);
+
     ASSERT_CTX_TSIZE(ctx);
     ASSERT_CTX_LOOPS(ctx);
 
-    while (q) {
-           q--;
+    do {
 
         // ORIGINAL
         xregister orig [REGS_N]; memcpy(&orig, data, sizeof(orig)); data += sizeof(orig);
@@ -138,7 +139,8 @@ static inline void __optimize xhash_do (xhash_s* const ctx, const u8* restrict d
             DO_O_ROTATE_CHARS;
 
         } while (--loops);
-    }
+
+    } while (--q);
 }
 
 void __optimize xhash_put (xhash_s* const restrict ctx, const u8* restrict data, uint size) {
@@ -149,43 +151,48 @@ void __optimize xhash_put (xhash_s* const restrict ctx, const u8* restrict data,
     ASSERT_CTX_TSIZE(ctx);
     ASSERT_CTX_LOOPS(ctx);
 
-    // QUANTO TEM
-    uint tsize = ctx->tsize;
+    if (size) {
 
-    if (tsize) {
+        // QUANTO TEM
+        uint tsize = ctx->tsize;
 
-        // QUANTO FALTA PARA COMPLETAR
-        uint puxar = REGS_SIZE - tsize;
+        if (tsize) {
 
-        // SÓ PODE PEGAR O QUE TEM
-        if (puxar > size)
-            puxar = size;
+            // QUANTO FALTA PARA COMPLETAR
+            uint puxar = REGS_SIZE - tsize;
 
-        memcpy(((u8*)&ctx->tmp) + tsize, data, puxar);
+            // SÓ PODE PEGAR O QUE TEM
+            if (puxar > size)
+                puxar = size;
 
-        // TIROU DO BUFFER...
-        data += puxar;
-        size -= puxar;
+            memcpy(((u8*)&ctx->tmp) + tsize, data, puxar);
 
-        // ...E COLOCOU NO TEMP
-        if ((tsize += puxar) != REGS_SIZE) {
-            // AINDA NAO TEM UM TEMP COMPLETO
-            ASSERT(size == 0);
-            ctx->tsize = tsize;
-            return;
+            // TIROU DO BUFFER...
+            data += puxar;
+            size -= puxar;
+
+            // ...E COLOCOU NO TEMP
+            if ((tsize += puxar) != REGS_SIZE) {
+                // AINDA NAO TEM UM TEMP COMPLETO
+                ASSERT(size == 0);
+                ctx->tsize = tsize;
+                return;
+            }
+
+            xhash_do(ctx, (u8*)&ctx->tmp, 1);
         }
 
-        xhash_do(ctx, (u8*)&ctx->tmp, 1);
+        if (size) {
+
+            xhash_do(ctx, data, size / REGS_SIZE);
+
+            // SOBROU ISSO
+            if ((tsize = size % REGS_SIZE))
+                memcpy(((u8*)&ctx->tmp), data + size - tsize, tsize);
+
+            ctx->tsize = tsize;
+        }
     }
-
-    // NAO TEM TEMP
-    xhash_do(ctx, data, size / REGS_SIZE);
-
-    // SOBROU ISSO
-    if ((tsize = size % REGS_SIZE))
-        memcpy(((u8*)&ctx->tmp), data + size - tsize, tsize);
-
-    ctx->tsize = tsize;
 }
 
 void __optimize xhash_flush (xhash_s* const restrict ctx, const u8* restrict data, uint size, u8* const restrict hash, const uint hash_len) {
