@@ -70,14 +70,20 @@ BUILD_ASSERT(sizeof(xregister) == sizeof(xregister_c));
 #include "util.h"
 #include "xmacros.h"
 
+#define MIN_LOOPS 1
+#define MAX_LOOPS 128
+
+BUILD_ASSERT(MIN_LOOPS <= MAX_LOOPS);
+
 #define ASSERT_CTX_TSIZE(ctx) ASSERT((ctx)->tsize < sizeof((ctx)->tmp))
-#define ASSERT_CTX_LOOPS(ctx) ASSERT(0 < (ctx)->loops && (ctx)->loops <= 1000)
+#define ASSERT_CTX_LOOPS(ctx) ASSERT(MIN_LOOPS < (ctx)->loops && (ctx)->loops <= MAX_LOOPS)
 
 #define REGS_SIZE (REGS_N * sizeof(xregister))
 
 typedef struct xhash_s {
-    u8          tmp [REGS_SIZE * 2]; // TMP + PAD (USEFUL TO FORCE A FINAL MIXING)
     xregister   acc [REGS_N]; // ACCUMULATOR
+    xregister_c tmp [REGS_N]; // TMP + PAD (USEFUL TO FORCE A FINAL MIXING)
+    xregister_c pad [REGS_N];
     xregister_c rot; // ROTATOR
     xregister_c end; // ENDIANESS
     u16 tsize;
@@ -155,7 +161,7 @@ void __optimize xhash_put (xhash_s* const restrict ctx, const u8* restrict data,
         if (puxar > size)
             puxar = size;
 
-        memcpy(ctx->tmp + tsize, data, puxar);
+        memcpy(((u8*)&ctx->tmp) + tsize, data, puxar);
 
         // TIROU DO BUFFER...
         data += puxar;
@@ -169,7 +175,7 @@ void __optimize xhash_put (xhash_s* const restrict ctx, const u8* restrict data,
             return;
         }
 
-        xhash_do(ctx, ctx->tmp, 1);
+        xhash_do(ctx, (u8*)&ctx->tmp, 1);
     }
 
     // NAO TEM TEMP
@@ -177,7 +183,7 @@ void __optimize xhash_put (xhash_s* const restrict ctx, const u8* restrict data,
 
     // SOBROU ISSO
     if ((tsize = size % REGS_SIZE))
-        memcpy(ctx->tmp, data + size - tsize, tsize);
+        memcpy(((u8*)&ctx->tmp), data + size - tsize, tsize);
 
     ctx->tsize = tsize;
 }
@@ -206,12 +212,12 @@ void __optimize xhash_flush (xhash_s* const restrict ctx, const u8* restrict dat
         // FLUSH ANY REMAINING TEMP
         const uint tsize = ctx->tsize;
 
-        // PAD/FINALIZER
-        memcpy(ctx->tmp + tsize,
-               ctx->tmp + tsize + REGS_SIZE,
-              REGS_SIZE - tsize);
+        // PAD
+        memcpy(((u8*)&ctx->tmp) + tsize,
+               ((u8*)&ctx->pad) + tsize,
+                      REGS_SIZE - tsize);
 
-        xhash_do(ctx, ctx->tmp, 2);
+        xhash_do(ctx, (u8*)&ctx->tmp, 2);
 
         // GLOBAL ENDIANESS
         DO_A_ENDIANESS;
