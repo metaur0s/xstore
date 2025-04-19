@@ -204,30 +204,24 @@ void __optimize xhash_flush (xhash_s* const restrict ctx, const u8* restrict dat
     //
     xhash_put(ctx, data, size);
 
-    if (hash_len) { // <-- ESTA CERTO ISSO?
+    // FLUSH ANY REMAINING TEMP
+    const uint tsize = ctx->tsize;
 
-        //
-        const xhash_s backup = *ctx;
+    // PAD
+    memcpy(((u8*)&ctx->tmp) + tsize,
+           ((u8*)&ctx->pad) + tsize,
+                  REGS_SIZE - tsize);
 
-        // FLUSH ANY REMAINING TEMP
-        const uint tsize = ctx->tsize;
+    xhash_do(ctx, (u8*)&ctx->tmp, 2);
 
-        // PAD
-        memcpy(((u8*)&ctx->tmp) + tsize,
-               ((u8*)&ctx->pad) + tsize,
-                      REGS_SIZE - tsize);
+    // GLOBAL ENDIANESS
+    // TODO: ISSO AQUI EM UM BUFFER TEMPORARIO
+    // AO INVES DE DAR UM MEMCPY VAI SIMPLESMENTE RODAR
+    // VAI PRECISAR DE UMA MACRO DIFERENTE
+    DO_A_ENDIANESS;
 
-        xhash_do(ctx, (u8*)&ctx->tmp, 2);
-
-        // GLOBAL ENDIANESS
-        DO_A_ENDIANESS;
-
-        // PASS
-        memcpy(hash, &ctx->acc, hash_len);
-
-        //
-        *ctx = backup;
-    }
+    // PASS
+    memcpy(hash, &ctx->acc, hash_len);
 }
 
 // REINITIALIZE
