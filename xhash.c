@@ -5,7 +5,7 @@
 #endif
 
 #define DO_O_ENDIANESS         R_LOOP   (O_ENDIANESS)
-#define DO_O_ROTATE_CHARS_BITS R_LOOP   (O_ROTATE_BITS)
+#define DO_O_ROTATE_BITS       R_LOOP   (O_ROTATE_BITS)
 #define DO_O_ROTATE_CHARS      R_LOOP   (O_ROTATE_BITS)
 #define DO_A_ACCUM             R_INLINE (A_ADD_O)
 #define DO_A_MIX               R_INLINE (A_MIX)
@@ -133,7 +133,7 @@ static inline void __optimize xhash_do (xhash_s* const ctx, const u8* restrict d
             DO_A_MIX;
 
             // ROTATE BITS, PER WORD, IN EACH REGISTER
-            DO_O_ROTATE_CHARS_BITS;
+            DO_O_ROTATE_BITS;
             // ROTATE BYTES, BETWEEN WORDS, IN EACH REGISTER
             DO_O_ROTATE_CHARS;
 
