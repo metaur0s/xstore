@@ -40,8 +40,6 @@ typedef uint64_t u64;
 #define WORD_BITS   64 // ON A WORD
 #define CHAR_BITS    8 // ON A CHAR
 
-
-
 #define REG_WORDS_N (REG_BITS / WORD_BITS)
 #define REG_CHARS_N (REG_BITS / CHAR_BITS)
 
@@ -90,22 +88,15 @@ typedef struct xhash_s {
 
 #include "skel.c"
 
-#define O_ROTATE_BITS(r) \
-     orig[r].w = \
-    (orig[r].w >> (WORD_BITS - (r + 1))) | \
-    (orig[r].w << (        (r + 1)))
-
+#define O_ROTATE_BITS(r)   orig[r].w = SWAP_LEFT(orig[r].w, WORD_BITS, r + 1)
 #define O_ROTATE_CHARS(r)  orig[r].c = __builtin_shuffle(     orig[r].c, ctx->rot[r])
 #define O_ENDIANESS(r)     orig[r].c = __builtin_shuffle(     orig[r].c, ctx->end )
 #define A_ENDIANESS(r) ctx->acc[r].c = __builtin_shuffle( ctx->acc[r].c, ctx->end )
 #define A_ADD_O(r)     ctx->acc[r].w += orig[r].w
-
-#define A_MIX(r) \
-    ctx->acc[r].w += \
-        (xregister_w) __builtin_shuffle ( \
-            ctx->acc[INDEX_HALFWAY(REGS_N, r)].c, \
-            ctx->acc[INDEX_OPOSITE(REGS_N, r)].c & (REG_CHARS_N - 1) \
-        )
+#define A_MIX(r)       ctx->acc[r].w += (xregister_w) __builtin_shuffle ( \
+                       ctx->acc[INDEX_HALFWAY(REGS_N, r)].c, \
+                       ctx->acc[INDEX_OPOSITE(REGS_N, r)].c & (REG_CHARS_N - 1) \
+                    )
 
 // NOTE: THE HASH IS SAVED BIG ENDIAN
 // TODO: restrict ctx vs ctx->temp?

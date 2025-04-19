@@ -38,3 +38,8 @@
         abort(); \
     } \
 })
+
+
+//
+#define SWAP_LEFT(w, width, q)  (((w) << (q)) | ((w) >> ((width) - (q))))
+#define SWAP_RIGHT(w, width, q) (((w) >> (q)) | ((w) << ((width) - (q))))

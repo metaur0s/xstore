@@ -18,6 +18,23 @@
 
 #include "xstore.c"
 
+#define XHASH_BITS  256
+#define REG_ALIGN   256
+#define REGS_N      16
+#define xregister   xregister256
+#define xregister_w xregister256_w
+#define xregister_c xregister256_c
+#define xhash_s     xhash256_s
+#define xhash_do    xhash256_do
+#define xhash_put   xhash256_put
+#define xhash_flush xhash256_flush
+#define xhash_new   xhash256_new
+#define xhash_reset xhash256_reset
+#define xhash_free  xhash256_free
+#define skel        skel256
+
+#include "xstore.c"
+
 #else //
 
 #include "xhash.c"
